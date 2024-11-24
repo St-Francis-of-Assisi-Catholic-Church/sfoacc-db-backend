@@ -1,2 +1,4 @@
 .env
 .venv
+nginx/ssl/
+nginx/logs/
