@@ -92,6 +92,32 @@ Once the setup is complete, you can access the following services:
     └── dev.sh            # Development setup script
 ```
 
+## Notes
+
+# Make script executable
+
+chmod +x scripts/manage.sh
+
+# Create superuser
+
+./scripts/manage.sh createsuperuser
+
+# Check database connection
+
+./scripts/manage.sh checkdb
+
+# Run development server (local only)
+
+./scripts/manage.sh runserver
+
+# Open Python shell
+
+./scripts/manage.sh shell
+
+# Show help
+
+./scripts/manage.sh help
+
 ## Environment Variables
 
 The project uses environment variables for configuration. Copy `sample.env` to `.env` and adjust the values as needed.
