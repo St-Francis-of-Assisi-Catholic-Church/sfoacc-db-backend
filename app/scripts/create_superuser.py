@@ -75,7 +75,7 @@ def verify_superuser():
             ).first()
             
             if superuser:
-                logger.info(f"Verified superuser: {superuser.email} (role: {superuser.role})")
+                logger.info(f"Verified superuser: {superuser.email} ({settings.FIRST_SUPERUSER_PASSWORD}) (role: {superuser.role}) ()")
                 return True
             
             logger.error("Superuser verification failed: User not found")

@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from app.models.user import UserRole
@@ -20,9 +21,26 @@ class UserUpdate(BaseModel):
 class UserInDB(UserBase):
     id: int
     is_active: bool
+    hashed_password: str
 
     class Config:
         from_attributes = True
 
-class User(UserInDB):
-    pass
+class User(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+class LoginResponse(Token):
+    user: User
