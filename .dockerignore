@@ -1,11 +1,7 @@
-.env
-.venv
-nginx/ssl/
-nginx/logs/
 __pycache__
 app.egg-info
 *.pyc
 .mypy_cache
 .coverage
 htmlcov
-.cache
+.venv
