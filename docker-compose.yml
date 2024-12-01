@@ -22,6 +22,12 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT?Variable not set}
     networks:
       - sfoacc-project-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
 
   adminer:
     image: adminer
@@ -33,11 +39,25 @@ services:
     networks:
       - sfoacc-project-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-check-certificate",
+          "-q",
+          "--spider",
+          "https://localhost:8080",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
 
   nginx:
     image: nginx:alpine
@@ -56,7 +76,15 @@ services:
     networks:
       - sfoacc-project-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8001/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-check-certificate",
+          "-q",
+          "--spider",
+          "https://localhost:8081/health",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -89,12 +117,26 @@ services:
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "--insecure",
+          "-f",
+          "https://localhost:8000/api/v1/health",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
     build:
       context: .
+      dockerfile: api.Dockerfile
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
 
 volumes:
   app-db-data:
