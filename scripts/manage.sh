@@ -73,8 +73,20 @@ run_server() {
 build() {
     if is_docker; then
         echo -e "${GREEN}Building Docker containers...${NC}"
+        docker compose down --remove-orphans
         docker compose build
     else
+        echo -e "${RED}Build command only available in Docker mode${NC}"
+    fi
+}
+
+
+# function to start services
+start_services() {
+    if is_docker; then
+        echo -e "${GREEN}Starting Docker services within the containers...${NC}"
+        docker compose up -d
+     else
         echo -e "${RED}Build command only available in Docker mode${NC}"
     fi
 }
@@ -85,6 +97,7 @@ show_help() {
     echo -e "  ${YELLOW}createsuperuser${NC}  - Create a superuser account"
     echo -e "  ${YELLOW}checkdb${NC}         - Check database connection"
     echo -e "  ${YELLOW}runserver${NC}       - Run development server or Docker containers"
+    echo -e "  ${YELLOW}start_services${NC}  - Starts services in the docker containers"
     echo -e "  ${YELLOW}build${NC}           - Build Docker containers"
     echo -e "  ${YELLOW}shell${NC}           - Open Python shell with app context"
     echo -e "  ${YELLOW}help${NC}            - Show this help message"
@@ -100,6 +113,9 @@ case "$1" in
         ;;
     "runserver")
         run_server
+        ;;
+    "start_services")
+        start_services
         ;;
     "build")
         build
