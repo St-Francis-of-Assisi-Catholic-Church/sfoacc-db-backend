@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -20,7 +19,7 @@ is_docker() {
 run_command() {
     if is_docker; then
         echo -e "${YELLOW}Running in Docker container...${NC}"
-        docker-compose exec api "$@"
+        docker compose exec api "$@"
     else
         echo -e "${YELLOW}Running locally...${NC}"
         "$@"
@@ -30,28 +29,53 @@ run_command() {
 # Function to create superuser
 create_superuser() {
     echo -e "${GREEN}Creating superuser...${NC}"
-    run_command python -m app.scripts.create_superuser
+    if is_docker; then
+        docker compose exec api python3 -m app.scripts.create_superuser
+    else
+        python3 -m app.scripts.create_superuser
+    fi
 }
 
 # Function to check database connection
 check_db() {
     echo -e "${YELLOW}Checking database connection...${NC}"
-    run_command python -c "
+    if is_docker; then
+        docker compose exec api python3 -c "
 from app.core.database import db
 from sqlalchemy import text
 with db.session() as session:
     session.execute(text('SELECT 1'))
 print('Database connection successful')
 "
+    else
+        python3 -c "
+from app.core.database import db
+from sqlalchemy import text
+with db.session() as session:
+    session.execute(text('SELECT 1'))
+print('Database connection successful')
+"
+    fi
 }
 
 # Function to run server
 run_server() {
     if is_docker; then
-        echo -e "${YELLOW}Server is managed by Docker. Use 'docker-compose up' instead.${NC}"
+        echo -e "${GREEN}Starting Docker containers...${NC}"
+        docker compose up
     else
         echo -e "${GREEN}Starting development server...${NC}"
         uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    fi
+}
+
+# Function to build containers
+build() {
+    if is_docker; then
+        echo -e "${GREEN}Building Docker containers...${NC}"
+        docker compose build
+    else
+        echo -e "${RED}Build command only available in Docker mode${NC}"
     fi
 }
 
@@ -60,7 +84,8 @@ show_help() {
     echo -e "${GREEN}Available commands:${NC}"
     echo -e "  ${YELLOW}createsuperuser${NC}  - Create a superuser account"
     echo -e "  ${YELLOW}checkdb${NC}         - Check database connection"
-    echo -e "  ${YELLOW}runserver${NC}       - Run development server (local only)"
+    echo -e "  ${YELLOW}runserver${NC}       - Run development server or Docker containers"
+    echo -e "  ${YELLOW}build${NC}           - Build Docker containers"
     echo -e "  ${YELLOW}shell${NC}           - Open Python shell with app context"
     echo -e "  ${YELLOW}help${NC}            - Show this help message"
 }
@@ -76,8 +101,15 @@ case "$1" in
     "runserver")
         run_server
         ;;
+    "build")
+        build
+        ;;
     "shell")
-        run_command python
+        if is_docker; then
+            docker compose exec api python3
+        else
+            python3
+        fi
         ;;
     "help"|"")
         show_help
