@@ -91,9 +91,9 @@ check_requirements() {
         exit 1
     fi
 
-    # Check if docker-compose is installed
-    if ! command -v docker-compose &> /dev/null; then
-        print_message "$RED" "Error: docker-compose is not installed!"
+    # Check if docker compose is installed
+    if ! command -v docker &> /dev/null; then
+        print_message "$RED" "Error: docker is not installed!"
         exit 1
     fi
 
@@ -116,7 +116,7 @@ wait_for_services() {
     local all_healthy=false
 
     while [ $elapsed -lt $timeout ]; do
-        if docker-compose ps | grep -q "unhealthy"; then
+        if docker compose ps | grep -q "unhealthy"; then
             print_message "$YELLOW" "Some services are still initializing... (${elapsed}s elapsed)"
             sleep 5
             elapsed=$((elapsed + 5))
@@ -155,9 +155,9 @@ main() {
     
     # Start services
     print_message "$BLUE" "Building and starting services..."
-    docker-compose down --remove-orphans
-    docker-compose build
-    docker-compose up -d
+    docker compose down --remove-orphans
+    docker compose build
+    docker compose up -d
     
     # Wait for services to be healthy
     wait_for_services
