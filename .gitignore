@@ -1,4 +1,5 @@
 .env
+.env.staging 
 .venv
 nginx/ssl/
 nginx/logs/
@@ -9,3 +10,10 @@ app.egg-info
 .coverage
 htmlcov
 .cache
+
+
+# local env files
+.env*.local
+.env
+.env.staging
+.env.production
