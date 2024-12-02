@@ -33,8 +33,9 @@ run_server() {
 # Function to build containers
 build() {
     echo -e "${GREEN}Building Docker containers...${NC}"
+    docker compose down -v
     docker compose down --remove-orphans
-    docker compose build
+    docker compose build --no-cache
 }
 
 # Function to start services
