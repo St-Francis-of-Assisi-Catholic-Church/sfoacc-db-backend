@@ -1,5 +1,6 @@
 from typing import Any
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 
 from app.api.deps import SessionDep, CurrentUser
 
@@ -7,8 +8,11 @@ from app.core.security import get_password_hash
 from app.schemas.user import User, UserCreate, UserUpdate
 from app.models.user import User as UserModel
 
-router = APIRouter()
+class APIResponse(BaseModel):
+    message: str
+    user: User
 
+router = APIRouter()
 
 @router.get("/users", response_model=list[User])
 async def get_users(
@@ -34,7 +38,7 @@ async def get_users(
     return [User.model_validate(user) for user in users]
 
 
-@router.put("/users/{user_id}", response_model=User)
+@router.put("/users/{user_id}", response_model=APIResponse)
 async def update_user(
     *,
     session: SessionDep,
@@ -78,7 +82,7 @@ async def update_user(
         "user": User.model_validate(user)
     }
 
-@router.delete("/users/{user_id}", response_model=User)
+@router.delete("/users/{user_id}", response_model=APIResponse)
 async def delete_user(
     *,
     session: SessionDep,
@@ -120,7 +124,7 @@ async def delete_user(
     }
 
 
-@router.get("/users/{user_id}", response_model=User)
+@router.get("/users/{user_id}", response_model=APIResponse)
 async def get_user(
     user_id: int,
     session: SessionDep,
@@ -137,7 +141,7 @@ async def get_user(
         )
     return User.model_validate(user)
 
-@router.post("/users", response_model=User)
+@router.post("/users", response_model=APIResponse)
 async def create_user(
     *,
     session: SessionDep,
