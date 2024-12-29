@@ -1,3 +1,20 @@
+# Default log format
+log_format main_json escape=json '{'
+    '"time_local":"$time_local",'
+    '"remote_addr":"$remote_addr",'
+    '"remote_user":"$remote_user",'
+    '"request":"$request",'
+    '"status": "$status",'
+    '"body_bytes_sent":"$body_bytes_sent",'
+    '"request_time":"$request_time",'
+    '"http_referrer":"$http_referer",'
+    '"http_user_agent":"$http_user_agent",'
+    '"request_id":"$request_id",'
+    '"proxy_host":"$proxy_host",'
+    '"upstream_addr":"$upstream_addr",'
+    '"upstream_response_time":"$upstream_response_time"'
+'}';
+
 # Default upstream configurations
 upstream api_service {
     server api:8000;
@@ -6,7 +23,6 @@ upstream api_service {
 upstream adminer_service {
     server adminer:8080;
 }
-
 
 # Main server block for API (port 8000)
 server {
@@ -19,9 +35,12 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-    # Logging
-    access_log /var/log/nginx/api_access.log;
-    error_log /var/log/nginx/api_error.log;
+    # Enhanced Logging
+    access_log /var/log/nginx/api_access.log main_json;
+    error_log /var/log/nginx/api_error.log debug;
+
+    # Request ID generation
+    add_header X-Request-ID $request_id;
 
     # API locations
     location / {
@@ -33,12 +52,18 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
         proxy_cache_bypass $http_upgrade;
         
         # CORS headers
         add_header 'Access-Control-Allow-Origin' '*' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
     }
 }
 
@@ -53,9 +78,12 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-    # Logging
-    access_log /var/log/nginx/adminer_access.log;
-    error_log /var/log/nginx/adminer_error.log;
+    # Enhanced Logging
+    access_log /var/log/nginx/adminer_access.log main_json;
+    error_log /var/log/nginx/adminer_error.log debug;
+
+    # Request ID generation
+    add_header X-Request-ID $request_id;
 
     location / {
         proxy_pass http://adminer_service;
@@ -66,7 +94,13 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
         proxy_cache_bypass $http_upgrade;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
     }
 }
 
@@ -81,19 +115,20 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-    # Logging
-    access_log /var/log/nginx/db_info_access.log;
-    error_log /var/log/nginx/db_info_error.log;
+    # Enhanced Logging
+    access_log /var/log/nginx/db_info_access.log main_json;
+    error_log /var/log/nginx/db_info_error.log debug;
+
+    # Request ID generation
+    add_header X-Request-ID $request_id;
 
     location / {
-        default_type text/plain;
-        return 200 'Database Information:
-        Host: db
-        Status: Active\n';
+        default_type application/json;
+        return 200 '{"database": {"host": "db", "status": "Active"}}';
     }
 
     location /health {
-        default_type text/plain;
-        return 200 'healthy\n';
+        default_type application/json;
+        return 200 '{"status": "healthy", "timestamp": "$time_local"}';
     }
 }
