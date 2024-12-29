@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from pydantic import AnyHttpUrl, AnyUrl, BeforeValidator, EmailStr, PostgresDsn, validator
 from pydantic_core import MultiHostUrl
@@ -11,6 +13,11 @@ def parse_cors(v: Any) -> Union[List[str], str]:
     raise ValueError(v)
 
 class Settings(BaseSettings):
+    # Get the absolute path to the root directory (2 levels up from config.py)
+    # ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+    # ENV_FILE = ROOT_DIR / ".env"
+
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding='utf-8',
@@ -71,6 +78,7 @@ class Settings(BaseSettings):
         Assemble database URL from settings
         """
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        # return  str(self.SQLALCHEMY_DATABASE_URI)
     
 
     

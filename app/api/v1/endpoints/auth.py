@@ -10,18 +10,10 @@ from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.api.deps import SessionDep, CurrentUser
 
-from app.schemas.user import User, UserCreate
+from app.schemas.user import LoginResponse, User, UserCreate
 from app.models.user import User as UserModel
 
 router = APIRouter()
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-class LoginResponse(Token):
-    user: User
-
     
 @router.post("/login", response_model=LoginResponse)
 async def login(
@@ -75,58 +67,58 @@ async def test_token(current_user: CurrentUser) -> Any:
     """
     return User.model_validate(current_user)
 
-@router.get("/user/{user_id}", response_model=User)
-async def get_user(
-    user_id: int,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> Any:
-    """
-    Get user by ID.
-    """
-    user = session.query(UserModel).filter(UserModel.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    return User.model_validate(user)
+# @router.get("/user/{user_id}", response_model=User)
+# async def get_user(
+#     user_id: int,
+#     session: SessionDep,
+#     current_user: CurrentUser,
+# ) -> Any:
+#     """
+#     Get user by ID.
+#     """
+#     user = session.query(UserModel).filter(UserModel.id == user_id).first()
+#     if not user:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="User not found"
+#         )
+#     return User.model_validate(user)
 
-@router.post("/users", response_model=User)
-async def create_user(
-    *,
-    session: SessionDep,
-    user_in: UserCreate,
-    current_user: CurrentUser,
-) -> Any:
-    """
-    Create new user.
-    """
-    # Check if the current user has permission to create users
-    if current_user.role != "super_admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+# @router.post("/users", response_model=User)
+# async def create_user(
+#     *,
+#     session: SessionDep,
+#     user_in: UserCreate,
+#     current_user: CurrentUser,
+# ) -> Any:
+#     """
+#     Create new user.
+#     """
+#     # Check if the current user has permission to create users
+#     if current_user.role != "super_admin":
+#         raise HTTPException(
+#             status_code=status.HTTP_403_FORBIDDEN,
+#             detail="Not enough permissions"
+#         )
     
-    # Check if user with this email exists
-    user = session.query(UserModel).filter(UserModel.email == user_in.email).first()
-    if user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+#     # Check if user with this email exists
+#     user = session.query(UserModel).filter(UserModel.email == user_in.email).first()
+#     if user:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Email already registered"
+#         )
     
-    # Create new user
-    user = UserModel(
-        email=user_in.email,
-        full_name=user_in.full_name,
-        role=user_in.role,
-        hashed_password=get_password_hash(user_in.password),
-        is_active=True
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+#     # Create new user
+#     user = UserModel(
+#         email=user_in.email,
+#         full_name=user_in.full_name,
+#         role=user_in.role,
+#         hashed_password=get_password_hash(user_in.password),
+#         is_active=True
+#     )
+#     session.add(user)
+#     session.commit()
+#     session.refresh(user)
     
-    return User.model_validate(user)
+#     return User.model_validate(user)

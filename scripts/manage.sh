@@ -61,7 +61,10 @@ run_server() {
 # Function to build containers
 build() {
     echo -e "${GREEN}Building Docker containers...${NC}"
-    docker compose down -v
+     # Note: Using 'docker compose down' instead of 'docker compose down -v'
+    # to preserve the database volume during rebuilds
+    # docker compose down -v
+    docker compose down 
     docker compose down --remove-orphans
     docker compose build --no-cache
 }
@@ -85,9 +88,36 @@ access_shell() {
     docker compose exec api python3
 }
 
+# Function to generate SSL certificates
+generate_ssl() {
+    echo -e "${GREEN}Generating SSL certificates...${NC}"
+    chmod +x scripts/generate_ssl.sh
+    ./scripts/generate_ssl.sh
+}
+
+# Function to setup project
+setup_project() {
+    echo -e "${GREEN}Setting up project...${NC}"
+    
+    # Create necessary directories
+    mkdir -p nginx/conf.d nginx/logs
+    
+    # Generate SSL certificates
+    generate_ssl
+    
+    # Build and start services
+    build
+    start_services
+
+    # create superuser
+    create_superuser
+}
+
 # Function to show help
 show_help() {
     echo -e "${GREEN}Available commands:${NC}"
+    echo -e "  ${YELLOW}setup${NC}           - Initial project setup (directories, SSL, build)"
+    echo -e "  ${YELLOW}ssl${NC}             - Generate SSL certificates"
     echo -e "  ${YELLOW}createsuperuser${NC}  - Create a superuser account"
     echo -e "  ${YELLOW}checkdb${NC}         - Check database connection"
     echo -e "  ${YELLOW}runserver${NC}       - Run Docker containers (attached mode)"
@@ -99,6 +129,12 @@ show_help() {
 
 # Main script
 case "$1" in
+    "setup")
+        setup_project
+        ;;
+    "ssl")
+        generate_ssl
+        ;;
     "createsuperuser")
         create_superuser
         ;;

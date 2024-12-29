@@ -4,6 +4,8 @@ from app.core.database import db
 from app.models.user import User, UserRole
 from app.core.security import get_password_hash
 from app.core.config import settings
+import os
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(
@@ -75,7 +77,7 @@ def verify_superuser():
             ).first()
             
             if superuser:
-                logger.info(f"Verified superuser: {superuser.email} ({settings.FIRST_SUPERUSER_PASSWORD}) (role: {superuser.role}) ()")
+                logger.info(f"Verified superuser: {superuser.email} ({settings.FIRST_SUPERUSER}) ({settings.FIRST_SUPERUSER_PASSWORD}) (role: {superuser.role})")
                 return True
             
             logger.error("Superuser verification failed: User not found")
@@ -87,6 +89,7 @@ def verify_superuser():
 
 if __name__ == "__main__":
     logger.info("Starting superuser creation process...")
+    logger.info(f"Using configuration: FIRST_SUPERUSER={settings.FIRST_SUPERUSER}")
     
     try:
         # Create tables if they don't exist

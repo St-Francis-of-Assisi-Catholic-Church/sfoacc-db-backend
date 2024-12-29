@@ -96,17 +96,19 @@ Once the setup is complete, you can access the following services:
 
 # Make script executable
 
-chmod +x scripts/manage.sh
+chmod +x ./scripts/manage.sh
 
-# Create superuser
+# First time setup
 
+./scripts/manage.sh build
+./scripts/manage.sh start
 ./scripts/manage.sh createsuperuser
 
-# Check database connection
+# Check if everything is working
 
 ./scripts/manage.sh checkdb
 
-# Run development server (local only)
+# For development (to see logs)
 
 ./scripts/manage.sh runserver
 
