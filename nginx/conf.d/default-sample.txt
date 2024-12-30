@@ -26,6 +26,7 @@ upstream adminer_service {
 
 # Main server block for API (port 8000)
 server {
+    listen 8000; 
     listen 8000 ssl;
     server_name localhost;
 
@@ -69,6 +70,7 @@ server {
 
 # Server block for Adminer (port 8080)
 server {
+    listen 8000; 
     listen 8080 ssl;
     server_name localhost;
 
@@ -104,9 +106,10 @@ server {
     }
 }
 
-# Server block for DB Info (port 8001)
+# Server block for DB Info (port 8081)
 server {
-    listen 8001 ssl;
+    listen 8000; 
+    listen 8081 ssl;
     server_name localhost;
 
     # SSL configuration
