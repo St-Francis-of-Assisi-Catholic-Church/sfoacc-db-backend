@@ -1,7 +1,7 @@
 import logging
 from sqlalchemy import text
 from app.core.database import db
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserStatus
 from app.core.security import get_password_hash
 from app.core.config import settings
 import os
@@ -55,8 +55,8 @@ def create_superuser():
                 email=settings.FIRST_SUPERUSER,
                 full_name="Super Admin",
                 hashed_password=get_password_hash(settings.FIRST_SUPERUSER_PASSWORD),
-                role=UserRole.SUPER_ADMIN,
-                is_active=True
+                role=UserRole.SUPER_ADMIN.value,
+                status = UserStatus.ACTIVE
             )
             
             session.add(superuser)
