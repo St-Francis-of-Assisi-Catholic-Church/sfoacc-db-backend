@@ -11,7 +11,7 @@ from app.models.user import User as UserModel, UserRole, UserStatus
 
 class APIResponse(BaseModel):
     message: str
-    user: User
+    data: Any | None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,11 +33,16 @@ async def get_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail= "User not found"
         )
-    return User.model_validate(user)
+    # return User.model_validate(user)
+    return APIResponse(
+            message="User retrieved successfully",
+            data=User.model_validate(user)
+        )
 
-@router.get("/users", response_model=list[User])
+
+@router.get("/users", response_model=APIResponse)
 async def get_users(
     session: SessionDep,
     current_user: CurrentUser,
@@ -58,7 +63,11 @@ async def get_users(
         .limit(limit)\
         .all()
     
-    return [User.model_validate(user) for user in users]
+    # return [User.model_validate(user) for user in users]
+    return APIResponse(
+        message="Users retrieved successfully",
+        data=[User.model_validate(user) for user in users]
+    )
 
 @router.put("/users/{user_id}", response_model=APIResponse)
 async def update_user(
@@ -120,7 +129,7 @@ async def update_user(
     
     return APIResponse(
         message="User updated successfully",
-        user=User.model_validate(user)
+        data=User.model_validate(user)
     )
     
     # # Update allowed fields if provided
@@ -162,7 +171,7 @@ async def delete_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail=f"User with id {user_id} not found"
         )
     
     # Prevent deleting the main super admin account
@@ -183,10 +192,12 @@ async def delete_user(
     session.delete(user)
     session.commit()
     
-    return {
-        "message": "User deleted successfully",
-        "user": User.model_validate(user)
-    }
+    return APIResponse(
+        message="User deleted successfully",
+        data= User.model_validate(user)
+    )
+    
+  
 
 @router.post("/users", response_model=APIResponse)
 async def create_user(
@@ -246,11 +257,11 @@ async def create_user(
             # logger.warning(f"Failed to send welcome email to {user.email}")
             print(F"Failed to send welcome email to {user.email}")
         
-        return {
-            "message": "User created successfully" + 
+        return  APIResponse(
+            message = "User created successfully" + 
                       (" and welcome email sent" if email_sent else " but email sending failed"),
-            "user": User.model_validate(user)
-        }
+            user = User.model_validate(user)
+        )
 
     except Exception as e:
         session.rollback()

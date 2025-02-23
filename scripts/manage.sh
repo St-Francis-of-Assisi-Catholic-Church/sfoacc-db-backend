@@ -88,6 +88,12 @@ access_shell() {
     docker compose exec api python3
 }
 
+# function to access container's bash shell
+access_bash() {
+    echo -e "${GREEN}Opening bash shell in api container...${NC}"
+    docker compose exec api /bin/bash
+}
+
 # Function to generate SSL certificates
 generate_ssl() {
     echo -e "${GREEN}Generating SSL certificates...${NC}"
@@ -124,6 +130,7 @@ show_help() {
     echo -e "  ${YELLOW}start${NC}           - Start services in detached mode"
     echo -e "  ${YELLOW}build${NC}           - Build Docker containers"
     echo -e "  ${YELLOW}shell${NC}           - Open Python shell in api container"
+    echo -e "  ${YELLOW}bash${NC}            - Open Container's bash shell in api"
     echo -e "  ${YELLOW}help${NC}            - Show this help message"
 }
 
@@ -152,6 +159,9 @@ case "$1" in
         ;;
     "shell")
         access_shell
+        ;;
+    "bash")
+        access_bash
         ;;
     "help"|"")
         show_help
