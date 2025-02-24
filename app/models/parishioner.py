@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Enum, ForeignKey, Table, Text, func
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, Enum, ForeignKey, Table, Text, func
 from sqlalchemy.orm import relationship
 import enum
 from app.core.database import Base
@@ -9,6 +9,17 @@ class Gender(str, enum.Enum):
     MALE = "male"
     FEMALE = "female"
     OTHER = "other"
+
+class MembershipStatus(str, enum.Enum):
+    ACTIVE = "active"
+    DECEASED = "deceased"
+    DISABLED = "disabled"
+
+class VerificationStatus(str, enum.Enum):
+    UNVERIFIED = "unverified"
+    VERIFIED = "verified"
+    PENDING = "pending"
+
 
 class MaritalStatus(str, enum.Enum):
     SINGLE = "single"
@@ -32,10 +43,10 @@ class SacramentType(str, enum.Enum):
 
 # Association table for skills
 parishioner_skills = Table(
-    'parishioner_skills',
+    'par_parishioner_skills',
     Base.metadata,
     Column('parishioner_id', Integer, ForeignKey('parishioners.id')),
-    Column('skill_id', Integer, ForeignKey('skills.id'))
+    Column('skill_id', Integer, ForeignKey('par_skills.id'))
 )
 
 class Parishioner(Base):
@@ -44,25 +55,32 @@ class Parishioner(Base):
     id = Column(Integer, primary_key=True, index=True)
     old_church_id = Column(String, nullable=True)
     new_church_id = Column(String,nullable=True)
+
+    # Status fields with defaults
+    membership_status = Column(Enum(MembershipStatus), nullable=False, default=MembershipStatus.ACTIVE, server_default=MembershipStatus.ACTIVE.name)
+    verification_status = Column(Enum(VerificationStatus), nullable=False, default=VerificationStatus.UNVERIFIED, server_default=VerificationStatus.UNVERIFIED.name)
+
     # Personal Info
     first_name = Column(String, nullable=False)
     other_names = Column(String, nullable=True)
     last_name = Column(String, nullable=False)
     maiden_name = Column(String, nullable=True)
     gender = Column(Enum(Gender), nullable=False)
-    date_of_birth = Column(DateTime(timezone=True), nullable=False)
-    place_of_birth = Column(String, nullable=False)
-    hometown = Column(String, nullable=False)
-    region = Column(String, nullable=False)
-    country = Column(String, nullable=False)
-    marital_status = Column(Enum(MaritalStatus), nullable=False)
+    date_of_birth = Column(Date, nullable=False)
+    place_of_birth = Column(String, nullable=True)
+    hometown = Column(String, nullable=True)
+    region = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    marital_status = Column(Enum(MaritalStatus), nullable=False, default=MaritalStatus.SINGLE, server_default=MaritalStatus.SINGLE.name)
+    mobile_number = Column(String, nullable=True)
+    whatsapp_number = Column(String, nullable=True)
+    email_address = Column(String, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
     # Relationships
-    contact_info_rel = relationship("ContactInfo", back_populates="parishioner_ref", uselist=False)
     occupation_rel = relationship("Occupation", back_populates="parishioner_ref", uselist=False)
     family_info_rel = relationship("FamilyInfo", back_populates="parishioner_ref", uselist=False)
     emergency_contacts_rel = relationship("EmergencyContact", back_populates="parishioner_ref")
@@ -70,23 +88,8 @@ class Parishioner(Base):
     sacraments_rel = relationship("Sacrament", back_populates="parishioner_ref")
     skills_rel = relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
 
-class ContactInfo(Base):
-    __tablename__ = "contact_info"
-
-    id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id"), unique=True)
-    mobile_number = Column(String, nullable=False)
-    whatsapp_number = Column(String, nullable=True)
-    email_address = Column(String, nullable=True)
-    
-    parishioner_ref = relationship("Parishioner", back_populates="contact_info_rel")
-    
-    # Timestamps
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
-
 class Occupation(Base):
-    __tablename__ = "occupations"
+    __tablename__ = "par_occupations"
 
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey("parishioners.id"), unique=True)
@@ -100,7 +103,7 @@ class Occupation(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
 class FamilyInfo(Base):
-    __tablename__ = "family_info"
+    __tablename__ = "par_family"
 
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey("parishioners.id"), unique=True)
@@ -124,10 +127,10 @@ class FamilyInfo(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
 class Child(Base):
-    __tablename__ = "children"
+    __tablename__ = "par_children"
 
     id = Column(Integer, primary_key=True, index=True)
-    family_info_id = Column(Integer, ForeignKey("family_info.id"))
+    family_info_id = Column(Integer, ForeignKey("par_family.id"))
     name = Column(String, nullable=False)
 
     family_ref = relationship("FamilyInfo", back_populates="children_rel")
@@ -137,7 +140,7 @@ class Child(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
 class EmergencyContact(Base):
-    __tablename__ = "emergency_contacts"
+    __tablename__ = "par_emergency_contacts"
 
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
@@ -153,7 +156,7 @@ class EmergencyContact(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
 class MedicalCondition(Base):
-    __tablename__ = "medical_conditions"
+    __tablename__ = "par_medical_conditions"
 
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
@@ -167,12 +170,12 @@ class MedicalCondition(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
 class Sacrament(Base):
-    __tablename__ = "sacraments"
+    __tablename__ = "par_sacraments"
 
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
     type = Column(Enum(SacramentType), nullable=False)
-    date = Column(DateTime(timezone=True), nullable=False)
+    date = Column(Date, nullable=False)
     place = Column(String, nullable=False)
     minister = Column(String, nullable=False)
 
@@ -183,7 +186,7 @@ class Sacrament(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
 class Skill(Base):
-    __tablename__ = "skills"
+    __tablename__ = "par_skills"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)

@@ -34,6 +34,12 @@ show_service_info() {
 }
 
 
+# Function to initiliaze db
+init_db() {
+    echo -e "${GREEN}Initializing database...${NC}"
+    docker compose exec api python3 -m app.scripts.init_db
+}
+
 # Function to create superuser
 create_superuser() {
     echo -e "${GREEN}Creating superuser...${NC}"
@@ -121,9 +127,10 @@ setup_project() {
 
 # Function to show help
 show_help() {
-    echo -e "${GREEN}Available commands:${NC}"
+    echo -e "  ${GREEN}Available commands:${NC}"
     echo -e "  ${YELLOW}setup${NC}           - Initial project setup (directories, SSL, build)"
     echo -e "  ${YELLOW}ssl${NC}             - Generate SSL certificates"
+    echo -e "  ${YELLOW}initdb${NC}             - Initiative db"
     echo -e "  ${YELLOW}createsuperuser${NC}  - Create a superuser account"
     echo -e "  ${YELLOW}checkdb${NC}         - Check database connection"
     echo -e "  ${YELLOW}runserver${NC}       - Run Docker containers (attached mode)"
@@ -136,6 +143,9 @@ show_help() {
 
 # Main script
 case "$1" in
+    "initdb")
+        init_db
+        ;;
     "setup")
         setup_project
         ;;
