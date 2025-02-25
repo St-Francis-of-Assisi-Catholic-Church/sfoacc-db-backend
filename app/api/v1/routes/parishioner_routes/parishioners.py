@@ -14,6 +14,13 @@ from app.models.parishioner import (
 )
 from app.schemas.parishioner import *
 
+from app.api.v1.routes.parishioner_routes.occupation import occupation_router
+from app.api.v1.routes.parishioner_routes.emergency_contacts import emergency_contacts_router
+from app.api.v1.routes.parishioner_routes.medical_conditions import medical_conditions_router
+from app.api.v1.routes.parishioner_routes.family_info import family_info_router
+from app.api.v1.routes.parishioner_routes.sacrements import sacraments_router
+from app.api.v1.routes.parishioner_routes.skills import skills_router
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,7 +76,6 @@ async def create_parishioner(
             detail=str(e)
         )
 
-
 # Get all parishioners
 @router.get("/", response_model=APIResponse)
 async def get_all_parishioners(
@@ -105,7 +111,6 @@ async def get_all_parishioners(
         }
     )
 
-
 # get detailed parishioner
 @router.get("/{parishioner_id}", response_model=APIResponse)
 async def get_detailed_parishioner(
@@ -138,12 +143,71 @@ async def get_detailed_parishioner(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parishioner not found"
         )
+    
+     # Get children properly
+    children = []
+    if parishioner.family_info_rel and parishioner.family_info_rel.children_rel:
+        for child in parishioner.family_info_rel.children_rel:
+            children.append({
+                "id": child.id,
+                "name": child.name,
+                "created_at": child.created_at,
+                "updated_at": child.updated_at
+            })
+    
+    family_info = None
+    if parishioner.family_info_rel:
+        family_info = {
+            "id": parishioner.family_info_rel.id,
+            "spouse_name": parishioner.family_info_rel.spouse_name,
+            "spouse_status": parishioner.family_info_rel.spouse_status,
+            "spouse_phone": parishioner.family_info_rel.spouse_phone,
+            "father_name": parishioner.family_info_rel.father_name,
+            "father_status": parishioner.family_info_rel.father_status,
+            "mother_name": parishioner.family_info_rel.mother_name,
+            "mother_status": parishioner.family_info_rel.mother_status,
+            "children": children,  # Add children explicitly
+            "created_at": parishioner.family_info_rel.created_at,
+            "updated_at": parishioner.family_info_rel.updated_at
+        }
+    
+    parishioner_dict = {
+        # Basic fields from ParishionerRead
+        "id": parishioner.id,
+        "old_church_id": parishioner.old_church_id,
+        "new_church_id": parishioner.new_church_id,
+        "first_name": parishioner.first_name,
+        "other_names": parishioner.other_names,
+        "last_name": parishioner.last_name,
+        "maiden_name": parishioner.maiden_name,
+        "gender": parishioner.gender,
+        "date_of_birth": parishioner.date_of_birth,
+        "place_of_birth": parishioner.place_of_birth,
+        "hometown": parishioner.hometown,
+        "region": parishioner.region,
+        "country": parishioner.country,
+        "marital_status": parishioner.marital_status,
+        "mobile_number": parishioner.mobile_number,
+        "whatsapp_number": parishioner.whatsapp_number,
+        "email_address": parishioner.email_address,
+        "membership_status": parishioner.membership_status,
+        "verification_status": parishioner.verification_status,
+        "created_at": parishioner.created_at,
+        "updated_at": parishioner.updated_at,
+        
+        # Map relationship fields with correct names
+        "occupation": parishioner.occupation_rel,
+        "family_info": family_info,
+        "emergency_contacts": parishioner.emergency_contacts_rel,
+        "medical_conditions": parishioner.medical_conditions_rel,
+        "sacraments": parishioner.sacraments_rel,
+        "skills": parishioner.skills_rel
+    }
 
     return APIResponse(
         message="Parishioner retrieved successfully",
-        data=ParishionerDetailedRead.model_validate(parishioner)  # Pydantic will automatically handle the conversion
+        data=ParishionerDetailedRead.model_validate(parishioner_dict)  # Pydantic will automatically handle the conversion
     )
-
 
 # Update parishioner
 @router.put("/{parishioner_id}", response_model=APIResponse)
@@ -207,4 +271,41 @@ async def update_parishioner(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    
+
+
+
+
+# parishioner occupation
+router.include_router(
+    occupation_router,
+    prefix="/{parishioner_id}/occupation",
+)
+
+# 
+router.include_router(
+    emergency_contacts_router,
+    prefix="/{parishioner_id}/emergency-contacts",
+)
+
+# 
+router.include_router(
+    medical_conditions_router,
+    prefix="/{parishioner_id}/medical-conditions",
+)
+
+# family info
+router.include_router(
+    family_info_router,
+     prefix="/{parishioner_id}/family-info",
+)
+
+# sacrements
+router.include_router(
+    sacraments_router,
+    prefix="/{parishioner_id}/sacraments",
+)
+
+router.include_router(
+    skills_router,
+    prefix="/{parishioner_id}/skills",
+)

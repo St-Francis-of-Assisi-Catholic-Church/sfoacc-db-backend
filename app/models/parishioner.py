@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, Enum, ForeignKey, Table, Text, func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship as db_relationship
 import enum
 from app.core.database import Base
 
@@ -81,12 +81,12 @@ class Parishioner(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
     # Relationships
-    occupation_rel = relationship("Occupation", back_populates="parishioner_ref", uselist=False)
-    family_info_rel = relationship("FamilyInfo", back_populates="parishioner_ref", uselist=False)
-    emergency_contacts_rel = relationship("EmergencyContact", back_populates="parishioner_ref")
-    medical_conditions_rel = relationship("MedicalCondition", back_populates="parishioner_ref")
-    sacraments_rel = relationship("Sacrament", back_populates="parishioner_ref")
-    skills_rel = relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
+    occupation_rel = db_relationship("Occupation", back_populates="parishioner_ref", uselist=False)
+    family_info_rel = db_relationship("FamilyInfo", back_populates="parishioner_ref", uselist=False)
+    emergency_contacts_rel = db_relationship("EmergencyContact", back_populates="parishioner_ref")
+    medical_conditions_rel = db_relationship("MedicalCondition", back_populates="parishioner_ref")
+    sacraments_rel = db_relationship("Sacrament", back_populates="parishioner_ref")
+    skills_rel = db_relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
 
 class Occupation(Base):
     __tablename__ = "par_occupations"
@@ -96,7 +96,7 @@ class Occupation(Base):
     role = Column(String, nullable=False)
     employer = Column(String, nullable=False)
 
-    parishioner_ref = relationship("Parishioner", back_populates="occupation_rel")
+    parishioner_ref = db_relationship("Parishioner", back_populates="occupation_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -119,8 +119,8 @@ class FamilyInfo(Base):
     mother_name = Column(String, nullable=True)
     mother_status = Column(Enum(ParentalStatus), nullable=True)
 
-    parishioner_ref = relationship("Parishioner", back_populates="family_info_rel")
-    children_rel = relationship("Child", back_populates="family_ref")
+    parishioner_ref = db_relationship("Parishioner", back_populates="family_info_rel")
+    children_rel = db_relationship("Child", back_populates="family_ref")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -133,7 +133,7 @@ class Child(Base):
     family_info_id = Column(Integer, ForeignKey("par_family.id"))
     name = Column(String, nullable=False)
 
-    family_ref = relationship("FamilyInfo", back_populates="children_rel")
+    family_ref = db_relationship("FamilyInfo", back_populates="children_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -145,11 +145,11 @@ class EmergencyContact(Base):
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
     name = Column(String, nullable=False)
-    relationshipp = Column(String, nullable=False)
+    relationship = Column(String, nullable=False)
     primary_phone = Column(String, nullable=False)
     alternative_phone = Column(String, nullable=True)
 
-    parishioner_ref = relationship("Parishioner", back_populates="emergency_contacts_rel")
+    parishioner_ref = db_relationship("Parishioner", back_populates="emergency_contacts_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -163,7 +163,7 @@ class MedicalCondition(Base):
     condition = Column(String, nullable=False)
     notes = Column(Text, nullable=True)
 
-    parishioner_ref = relationship("Parishioner", back_populates="medical_conditions_rel")
+    parishioner_ref = db_relationship("Parishioner", back_populates="medical_conditions_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -179,7 +179,7 @@ class Sacrament(Base):
     place = Column(String, nullable=False)
     minister = Column(String, nullable=False)
 
-    parishioner_ref = relationship("Parishioner", back_populates="sacraments_rel")
+    parishioner_ref = db_relationship("Parishioner", back_populates="sacraments_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -191,7 +191,7 @@ class Skill(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
     
-    parishioners_ref = relationship("Parishioner", secondary=parishioner_skills, back_populates="skills_rel")
+    parishioners_ref = db_relationship("Parishioner", secondary=parishioner_skills, back_populates="skills_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
