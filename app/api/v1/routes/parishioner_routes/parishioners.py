@@ -86,6 +86,11 @@ async def get_all_parishioners(
     limit: int = Query(100, ge=1, le=100)
 ) -> Any:
     """Get list of all parishioners with pagination."""
+    if current_user.role not in ["super_admin", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
     
     # Query parishioners with pagination
     parishioners = session.query(ParishionerModel)\
