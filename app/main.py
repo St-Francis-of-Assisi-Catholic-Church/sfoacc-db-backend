@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 import logging
 import time
 from typing import Callable
-
+from contextlib import asynccontextmanager
 from fastapi.routing import APIRoute
 
 from app.core.config import settings
@@ -21,6 +21,42 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     tag = route.tags[0] if route.tags else "default"
     return f"{tag}-{route.name}"
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handle startup and shutdown events for the application
+    This replaces the @app.on_event("startup") and @app.on_event("shutdown") decorators
+    """
+    try:
+        # Startup
+        logger.info("Starting up application...")
+        
+        # Initialize database
+        db.init_app()
+        
+        # Check database connection
+        if await db.check_connection():
+            logger.info("Successfully connected to database")
+        else:
+            logger.error("Failed to connect to database")
+            raise Exception("Database connection failed")
+        
+        # Log startup information
+        logger.info(f"Environment: {settings.ENVIRONMENT}")
+        logger.info(f"API Version 1 path: {settings.API_V1_STR}")
+        logger.info(f"Backend CORS origins: {settings.BACKEND_CORS_ORIGINS}")
+        
+        yield  # Server is running
+        
+        # Shutdown
+        logger.info("Shutting down application...")
+        db.dispose()  # Clean up database connections
+        logger.info("Application shutdown complete")
+        
+    except Exception as e:
+        logger.error(f"Application lifecycle error: {str(e)}")
+        raise
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -28,22 +64,38 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
     redoc_url=f"{settings.API_V1_STR}/redoc",
+    lifespan=lifespan,  # Use the lifespan context manager
 )
 
 
-# Middleware for request timing
+# Middleware for request timing and logging
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next: Callable):
-    """Add processing time to response header"""
+    """Add processing time to response header and log request details"""
     start_time = time.time()
-    response = await call_next(request)
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(process_time)
-    return response
+    
+    # Log request
+    logger.info(f"Request: {request.method} {request.url}")
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        response.headers["X-Process-Time"] = str(process_time)
+        
+        # Log response
+        logger.info(f"Response: {response.status_code} - Process Time: {process_time:.4f}s")
+        return response
+    except Exception as e:
+        logger.error(f"Request failed: {str(e)}")
+        process_time = time.time() - start_time
+        logger.info(f"Error Response - Process Time: {process_time:.4f}s")
+        raise
 
 # Custom exception handler for validation errors
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Enhanced validation error handling with logging"""
+    logger.error(f"Validation error: {exc.errors()}")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
@@ -62,9 +114,8 @@ if settings.all_cors_origins:
         allow_headers=["*"],
     )
 
-# api router
+# API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
-
 
 # Root endpoint
 @app.get("/", tags=["root"])
@@ -74,50 +125,8 @@ async def root():
     """
     return {
         "message": "Welcome to St Francis Church Management System API",
+        "version": settings.VERSION,  # Add version if available in settings
+        "environment": settings.ENVIRONMENT,
         "docs": f"{settings.API_V1_STR}/docs",
         "redoc": f"{settings.API_V1_STR}/redoc"
     }
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Actions to run on application startup
-    """
-    logger.info("Starting up application...")
-    try:
-        # Initialize database
-        db.init_db()
-        
-        # Check database connection
-        if await db.check_connection():
-            logger.info("Successfully connected to database")
-        else:
-            logger.error("Failed to connect to database")
-            raise Exception("Database connection failed")
-        
-        # Additional startup tasks
-        logger.info(f"Environment: {settings.ENVIRONMENT}")
-        logger.info(f"API Version 1 path: {settings.API_V1_STR}")
-        logger.info(f"Backend CORS origins: {settings.BACKEND_CORS_ORIGINS}")
-        
-    except Exception as e:
-        logger.error(f"Startup error: {str(e)}")
-        raise
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Actions to run on application shutdown
-    """
-    logger.info("Shutting down application...")
-    try:
-        # Add cleanup tasks here
-        # For example: close connections, cleanup resources
-        logger.info("Cleaning up resources...")
-        
-        # Log successful shutdown
-        logger.info("Application shutdown complete")
-    except Exception as e:
-        logger.error(f"Error during shutdown: {str(e)}")
-        raise
-

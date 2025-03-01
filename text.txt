@@ -1,0 +1,11 @@
+{
+  "first_name": "Kofi Kwame",
+  "last_name": "Mensah",
+  "gender": "male",
+  "date_of_birth": "01/01/2025",
+  "place_of_birth": "Battor",
+  "hometown": "Accra",
+  "region": "Volta",
+  "country": "Ghana",
+  "marital_status": "single",
+}
