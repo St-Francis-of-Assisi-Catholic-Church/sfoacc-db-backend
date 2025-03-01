@@ -78,7 +78,7 @@ async def create_parishioner(
         )
 
 # Get all parishioners
-@router.get("/", response_model=APIResponse)
+@router.get("/all", response_model=APIResponse)
 async def get_all_parishioners(
     session: SessionDep,
     current_user: CurrentUser,
