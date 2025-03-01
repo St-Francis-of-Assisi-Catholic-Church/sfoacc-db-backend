@@ -20,6 +20,7 @@ from app.api.v1.routes.parishioner_routes.medical_conditions import medical_cond
 from app.api.v1.routes.parishioner_routes.family_info import family_info_router
 from app.api.v1.routes.parishioner_routes.sacrements import sacraments_router
 from app.api.v1.routes.parishioner_routes.skills import skills_router
+from app.api.v1.routes.parishioner_routes.file_upload import file_upload_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -308,4 +309,9 @@ router.include_router(
 router.include_router(
     skills_router,
     prefix="/{parishioner_id}/skills",
+)
+
+router.include_router(
+file_upload_router,
+prefix="/import"
 )

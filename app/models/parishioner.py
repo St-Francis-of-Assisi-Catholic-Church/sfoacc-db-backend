@@ -49,6 +49,14 @@ parishioner_skills = Table(
     Column('skill_id', Integer, ForeignKey('par_skills.id'))
 )
 
+# Association table for languages
+parishioner_languages = Table(
+    'par_parishioner_languages',
+    Base.metadata,
+    Column('parishioner_id', Integer, ForeignKey('parishioners.id')),
+    Column('language_id', Integer, ForeignKey('par_languages.id'))
+)
+
 class Parishioner(Base):
     __tablename__ = "parishioners"
 
@@ -75,6 +83,9 @@ class Parishioner(Base):
     mobile_number = Column(String, nullable=True)
     whatsapp_number = Column(String, nullable=True)
     email_address = Column(String, nullable=True)
+    # new additions
+    place_of_worship = Column(String, nullable=True)
+    current_residence = Column(String, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -87,6 +98,7 @@ class Parishioner(Base):
     medical_conditions_rel = db_relationship("MedicalCondition", back_populates="parishioner_ref")
     sacraments_rel = db_relationship("Sacrament", back_populates="parishioner_ref")
     skills_rel = db_relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
+    languages_rel = db_relationship("Language", secondary=parishioner_languages, back_populates="parishioners_ref")
 
 class Occupation(Base):
     __tablename__ = "par_occupations"
@@ -192,6 +204,18 @@ class Skill(Base):
     name = Column(String, unique=True, nullable=False)
     
     parishioners_ref = db_relationship("Parishioner", secondary=parishioner_skills, back_populates="skills_rel")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+class Language(Base):
+    __tablename__ = "par_languages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    
+    parishioners_ref = db_relationship("Parishioner", secondary=parishioner_languages, back_populates="languages_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())

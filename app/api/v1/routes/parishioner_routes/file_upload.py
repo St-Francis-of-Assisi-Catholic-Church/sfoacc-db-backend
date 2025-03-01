@@ -1,24 +1,39 @@
+import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import pandas as pd
 from io import StringIO
 import csv
 
-from app.core.database import get_db
+from app.api.deps import SessionDep, CurrentUser
+from app.core.database import Database as db
+from app.models.user import UserRole
 from app.services.parisioner_file_import import ParishionerImportService
 
-router = APIRouter()
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-@router.post("/import/parishioners", status_code=status.HTTP_201_CREATED)
+file_upload_router = APIRouter()
+
+@file_upload_router.post("/parishioners", status_code=status.HTTP_201_CREATED, )
 async def upload_parishioners_csv(
+    session: SessionDep ,
+    current_user: CurrentUser,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+
 ):
     """
     Upload a CSV or TSV file with parishioner data and import it into the database.
     
     The file should have columns matching the parishioner model fields.
     """
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+             status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions. Only super admins can update users."
+        )
+  
     if not (file.filename.endswith('.csv') or file.filename.endswith('.tsv') or file.filename.endswith('.txt')):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -26,6 +41,7 @@ async def upload_parishioners_csv(
         )
     
     content = await file.read()
+    logger.info(content)
     try:
         # Detect the delimiter based on file content
         string_io = StringIO(content.decode('utf-8'))
@@ -37,8 +53,7 @@ async def upload_parishioners_csv(
             string_io, 
             delimiter=dialect.delimiter,
             engine='python',
-            error_bad_lines=False,  # Skip bad lines
-            warn_bad_lines=True     # Warn about bad lines
+            on_bad_lines="warn",  # Warn about bad lines
         )
     except Exception as e:
         raise HTTPException(
@@ -47,7 +62,7 @@ async def upload_parishioners_csv(
         )
     
     # Validate required columns
-    required_columns = ["Last Name (Surname)", "First Name"]
+    required_columns = ["Last Name (Surname)", "First Name", "Date of Birth"]
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         raise HTTPException(
@@ -56,7 +71,7 @@ async def upload_parishioners_csv(
         )
     
     # Process the CSV data
-    import_service = ParishionerImportService(db)
+    import_service = ParishionerImportService(session)
     result = import_service.import_csv(df)
     
     # Return the import results
@@ -68,7 +83,7 @@ async def upload_parishioners_csv(
         "errors": result["errors"][:10]  # Limit errors to first 10
     }
 
-@router.get("/import/template", status_code=status.HTTP_200_OK)
+@file_upload_router.get("/template", status_code=status.HTTP_200_OK)
 async def get_import_template():
     """
     Get information about the expected file format for parishioner import.
@@ -76,7 +91,8 @@ async def get_import_template():
     return {
         "required_columns": [
             "Last Name (Surname)", 
-            "First Name"
+            "First Name",
+            "Date of Birth"
         ],
         "supported_columns": [
             "Last Name (Surname)",
@@ -84,7 +100,6 @@ async def get_import_template():
             "Other Names",
             "Maiden Name",
             "Gender",
-            "Date of Birth",
             "Place of Birth",
             "Hometown",
             "Region/State",
@@ -107,7 +122,9 @@ async def get_import_template():
             "Father's Life Status",
             "MOTHER'S NAME",
             "Mother's Life Status",
-            "Unique ID"
+            "Unique/ Old Church ID",
+            "Place of Worship",
+            "Current place of Residence/Area"
         ],
         "notes": [
             "The file can be CSV or TSV format",

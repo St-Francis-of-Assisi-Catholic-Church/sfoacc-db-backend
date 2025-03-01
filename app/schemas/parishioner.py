@@ -192,6 +192,8 @@ class ParishionerBase(BaseModel):
     mobile_number: Optional[str] = None
     whatsapp_number: Optional[str] = None
     email_address: Optional[EmailStr] = None
+    place_of_worship: Optional[str] = None
+    current_residence: Optional[str] = None
 
     membership_status: Optional[MembershipStatus] = MembershipStatus.ACTIVE  # Default value
     verification_status: Optional[VerificationStatus] = VerificationStatus.UNVERIFIED 
@@ -219,6 +221,8 @@ class ParishionerPartialUpdate(BaseModel):
     mobile_number: Optional[str] = None
     whatsapp_number: Optional[str] = None
     email_address: Optional[EmailStr] = None
+    place_of_worship: Optional[str] = None
+    current_residence: Optional[str] = None
 
     membership_status: Optional[MembershipStatus] = MembershipStatus.ACTIVE 
     verification_status: Optional[VerificationStatus] = VerificationStatus.UNVERIFIED 
@@ -238,6 +242,7 @@ class ParishionerDetailedRead(ParishionerRead):
     medical_conditions: List[MedicalConditionRead] = []
     sacraments: List[SacramentRead] = []
     skills: List[SkillRead] = []
+    # languages: List[]
 
     class Config:
         from_attributes = True
