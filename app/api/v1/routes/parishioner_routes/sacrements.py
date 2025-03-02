@@ -1,6 +1,7 @@
 import logging
 from typing import Any, List
 from fastapi import APIRouter, HTTPException, status, Path as FastAPIPath
+from pydantic import validator
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import and_
@@ -411,3 +412,86 @@ async def delete_sacrament_by_type(
             detail=str(e)
         )
 
+
+
+
+
+# Now add the batch endpoint to the sacraments_router
+@sacraments_router.post("/batch", response_model=APIResponse)
+async def batch_update_sacraments(
+    parishioner_id: int,
+    batch_data: List[SacramentCreate],
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> APIResponse:
+    """
+    Replace all existing sacraments of a parishioner with the new batch.
+    Each parishioner can have at most one of each sacrament type.
+    """
+    # Check permissions
+    if current_user.role not in ["super_admin", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Check if parishioner exists
+    parishioner = get_parishioner_or_404(session, parishioner_id)
+    
+    try:
+        # Delete all existing sacraments for this parishioner
+        session.query(Sacrament).filter(
+            Sacrament.parishioner_id == parishioner_id
+        ).delete()
+        
+        # Validate no duplicate sacrament types in the request
+        sacrament_types = [sacrament.type for sacrament in batch_data]
+        if len(sacrament_types) != len(set(sacrament_types)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Each parishioner can have at most one of each sacrament type"
+            )
+        
+        # Create new sacraments
+        new_sacraments = []
+        for sacrament_data in batch_data:
+            new_sacrament = Sacrament(
+                parishioner_id=parishioner_id,
+                type=sacrament_data.type,
+                date=sacrament_data.date,
+                place=sacrament_data.place,
+                minister=sacrament_data.minister
+            )
+            session.add(new_sacrament)
+            new_sacraments.append(new_sacrament)
+        
+        session.commit()
+        
+        # Refresh all new sacraments to get their IDs and any other database-generated values
+        for sacrament in new_sacraments:
+            session.refresh(sacrament)
+        
+        # Refresh the parishioner to update relationships
+        session.refresh(parishioner)
+        
+        return APIResponse(
+            message=f"Successfully replaced sacraments for parishioner. Now has {len(new_sacraments)} sacraments.",
+            data=[SacramentRead.model_validate(sacrament) for sacrament in new_sacraments]
+        )
+        
+    except ValueError as e:
+        # Handle validation errors from the Pydantic model
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error updating sacraments for parishioner: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
