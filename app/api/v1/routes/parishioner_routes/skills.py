@@ -115,7 +115,7 @@ async def add_multiple_skills(
     current_user: CurrentUser = None,
 ) -> APIResponse:
     """
-    Add multiple skills to a parishioner at once.
+    Replace all existing skills of a parishioner with the new batch of skills.
     """
     # Check permissions
     if current_user.role not in ["super_admin", "admin"]:
@@ -127,53 +127,51 @@ async def add_multiple_skills(
     # Check if parishioner exists
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
-    if not skills:
-        return APIResponse(
-            message="No skills provided to add",
-            data=[]
-        )
-    
     try:
-        added_skills = []
+        # First, remove all existing skills association
+        parishioner.skills_rel.clear()
+        
+        # If no new skills provided, just return empty list after clearing existing skills
+        if not skills:
+            session.commit()
+            return APIResponse(
+                message="All skills removed from parishioner, no new skills provided",
+                data=[]
+            )
+        
+        new_skills = []
         
         for skill_data in skills:
-            # Check if skill already exists
+            # Check if skill already exists in the database
             db_skill = session.query(Skill).filter(
                 Skill.name == skill_data.name
             ).first()
             
-            # If skill doesn't exist, create it
+            # If skill doesn't exist in the database, create it
             if not db_skill:
                 db_skill = Skill(name=skill_data.name)
                 session.add(db_skill)
                 session.flush()
             
-            # Add skill to parishioner if not already present
-            if db_skill not in parishioner.skills_rel:
-                parishioner.skills_rel.append(db_skill)
-                added_skills.append(db_skill)
-        
-        if not added_skills:
-            return APIResponse(
-                message="No new skills were added to parishioner",
-                data=[]
-            )
+            # Add skill to parishioner
+            parishioner.skills_rel.append(db_skill)
+            new_skills.append(db_skill)
         
         session.commit()
         
+        # Return all skills now assigned to the parishioner
         return APIResponse(
-            message=f"Successfully added {len(added_skills)} skills to parishioner",
-            data=[SkillRead.model_validate(skill) for skill in added_skills]
+            message=f"Successfully replaced skills for parishioner. Now has {len(new_skills)} skills.",
+            data=[SkillRead.model_validate(skill) for skill in new_skills]
         )
     
     except Exception as e:
         session.rollback()
-        logger.error(f"Error adding skills to parishioner: {str(e)}")
+        logger.error(f"Error updating skills for parishioner: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
 # Remove a skill from a parishioner
 @skills_router.delete("/{skill_id}", response_model=APIResponse)
 async def remove_parishioner_skill(
