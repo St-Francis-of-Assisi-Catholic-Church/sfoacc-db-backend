@@ -28,7 +28,7 @@ def get_parishioner_or_404(session: Session, parishioner_id: int):
     return parishioner
 
 # Create occupation for a parishioner
-@occupation_router.post("/", response_model=APIResponse)
+@occupation_router.post("", response_model=APIResponse)
 async def create_occupation(
     *,
     parishioner_id: int,
@@ -95,7 +95,7 @@ async def create_occupation(
         )
 
 # Get occupation for a parishioner
-@occupation_router.get("/", response_model=APIResponse)
+@occupation_router.get("", response_model=APIResponse)
 async def get_occupation(
     parishioner_id: int,
     session: SessionDep,
@@ -122,7 +122,7 @@ async def get_occupation(
     )
 
 # Update occupation for a parishioner
-@occupation_router.put("/", response_model=APIResponse)
+@occupation_router.put("", response_model=APIResponse)
 async def update_occupation(
     *,
     parishioner_id: int,
@@ -181,7 +181,7 @@ async def update_occupation(
         )
 
 # Delete occupation for a parishioner
-@occupation_router.delete("/", response_model=APIResponse)
+@occupation_router.delete("", response_model=APIResponse)
 async def delete_occupation(
     parishioner_id: int,
     session: SessionDep,
