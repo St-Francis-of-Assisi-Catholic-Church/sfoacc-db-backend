@@ -28,6 +28,7 @@ class SacramentBase(BaseModel):
     place: str
     minister: str
 
+
 class SkillBase(BaseModel):
     name: str
 

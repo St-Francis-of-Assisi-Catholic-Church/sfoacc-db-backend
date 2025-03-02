@@ -255,3 +255,105 @@ async def delete_medical_condition(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+# Add the following endpoint to the medical_conditions_router
+
+@medical_conditions_router.post("/batch", response_model=APIResponse)
+async def batch_update_medical_conditions(
+    parishioner_id: int,
+    batch_data: List[MedicalConditionCreate],
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> APIResponse:
+    """
+    Replace all existing medical conditions of a parishioner with the new batch.
+    Maximum of 5 medical conditions allowed per parishioner.
+    Each condition must be unique for the parishioner.
+    """
+    # Check permissions
+    if current_user.role not in ["super_admin", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Check if parishioner exists
+    parishioner = get_parishioner_or_404(session, parishioner_id)
+    
+    # Validate batch size doesn't exceed maximum allowed
+    if len(batch_data) > MAX_MEDICAL_CONDITIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum of {MAX_MEDICAL_CONDITIONS} medical conditions allowed per parishioner"
+        )
+    
+    # Check for duplicate conditions in the request
+    condition_names = [condition.condition.lower().strip() for condition in batch_data]
+    if len(condition_names) != len(set(condition_names)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Duplicate medical conditions detected in the request"
+        )
+    
+    # Get existing conditions to check for duplicates
+    existing_conditions = session.query(MedicalCondition).filter(
+        MedicalCondition.parishioner_id == parishioner_id
+    ).all()
+    
+    existing_condition_names = [condition.condition.lower().strip() for condition in existing_conditions]
+    
+    # Check if any requested conditions already exist
+    duplicate_conditions = []
+    for condition in batch_data:
+        if condition.condition.lower().strip() in existing_condition_names:
+            duplicate_conditions.append(condition.condition)
+    
+    if duplicate_conditions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The following medical conditions already exist for this parishioner: {', '.join(duplicate_conditions)}"
+        )
+    
+    try:
+        
+        # Create new medical conditions
+        new_conditions = []
+        for condition_data in batch_data:
+            new_condition = MedicalCondition(
+                parishioner_id=parishioner_id,
+                condition=condition_data.condition,
+                notes=condition_data.notes
+            )
+            session.add(new_condition)
+            new_conditions.append(new_condition)
+        
+        session.commit()
+        
+        # Refresh all new conditions to get their IDs and any other database-generated values
+        for condition in new_conditions:
+            session.refresh(condition)
+        
+        # Refresh the parishioner to update relationships
+        session.refresh(parishioner)
+        
+        return APIResponse(
+            message=f"Successfully replaced medical conditions for parishioner. Now has {len(new_conditions)} medical conditions.",
+            data=[MedicalConditionRead.model_validate(condition) for condition in new_conditions]
+        )
+        
+    except ValueError as e:
+        # Handle validation errors from the Pydantic model
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error updating medical conditions for parishioner: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
