@@ -257,7 +257,6 @@ async def delete_medical_condition(
         )
 
 # Add the following endpoint to the medical_conditions_router
-
 @medical_conditions_router.post("/batch", response_model=APIResponse)
 async def batch_update_medical_conditions(
     parishioner_id: int,
@@ -268,7 +267,6 @@ async def batch_update_medical_conditions(
     """
     Replace all existing medical conditions of a parishioner with the new batch.
     Maximum of 5 medical conditions allowed per parishioner.
-    Each condition must be unique for the parishioner.
     """
     # Check permissions
     if current_user.role not in ["super_admin", "admin"]:
@@ -287,34 +285,11 @@ async def batch_update_medical_conditions(
             detail=f"Maximum of {MAX_MEDICAL_CONDITIONS} medical conditions allowed per parishioner"
         )
     
-    # Check for duplicate conditions in the request
-    condition_names = [condition.condition.lower().strip() for condition in batch_data]
-    if len(condition_names) != len(set(condition_names)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Duplicate medical conditions detected in the request"
-        )
-    
-    # Get existing conditions to check for duplicates
-    existing_conditions = session.query(MedicalCondition).filter(
-        MedicalCondition.parishioner_id == parishioner_id
-    ).all()
-    
-    existing_condition_names = [condition.condition.lower().strip() for condition in existing_conditions]
-    
-    # Check if any requested conditions already exist
-    duplicate_conditions = []
-    for condition in batch_data:
-        if condition.condition.lower().strip() in existing_condition_names:
-            duplicate_conditions.append(condition.condition)
-    
-    if duplicate_conditions:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"The following medical conditions already exist for this parishioner: {', '.join(duplicate_conditions)}"
-        )
-    
     try:
+        # Delete all existing medical conditions for this parishioner
+        session.query(MedicalCondition).filter(
+            MedicalCondition.parishioner_id == parishioner_id
+        ).delete()
         
         # Create new medical conditions
         new_conditions = []
@@ -337,7 +312,7 @@ async def batch_update_medical_conditions(
         session.refresh(parishioner)
         
         return APIResponse(
-            message=f"Successfully replaced medical conditions for parishioner. Now has {len(new_conditions)} medical conditions.",
+            message=f"Successfully updated medical conditions for parishioner. Now has {len(new_conditions)} medical conditions.",
             data=[MedicalConditionRead.model_validate(condition) for condition in new_conditions]
         )
         
