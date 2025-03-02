@@ -130,8 +130,24 @@ class SacramentUpdate(BaseModel):
 
 class ChildUpdate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
+class ParentInfo(BaseModel):
+    name: Optional[str] = None
+    status: Optional[ParentalStatus] = None
 
-# Detailed Parishioner Response Schema
+class SpouseInfo(BaseModel):
+    name: Optional[str] = None
+    status: Optional[ParentalStatus] = None
+    phone: Optional[str] = None
+
+class ChildInfo(BaseModel):
+    name: Optional[str] = None
+
+class FamilyInfoBatch(BaseModel):
+    spouse: Optional[SpouseInfo] = None
+    children: Optional[List[ChildInfo]] = None
+    father: Optional[ParentInfo] = None
+    mother: Optional[ParentInfo] = None
+
 class FamilyInfoRead(BaseModel):
     id: int
     spouse_name: Optional[str] = None

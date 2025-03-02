@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List
+from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, status, Path as FastAPIPath
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import Parishioner, FamilyInfo, Child, ParentalStatus
 from app.schemas.parishioner import (
-    FamilyInfoRead, FamilyInfoUpdate, ChildCreate,
+    FamilyInfoBatch, FamilyInfoRead, FamilyInfoUpdate, ChildCreate,
     ChildRead, ChildUpdate, APIResponse
 )
 
@@ -29,6 +29,7 @@ def get_parishioner_or_404(session: Session, parishioner_id: int):
             detail="Parishioner not found"
         )
     return parishioner
+
 
 # Create or update family info for a parishioner
 @family_info_router.post("/", response_model=APIResponse)
@@ -173,14 +174,20 @@ async def get_family_info(
         data=FamilyInfoRead.model_validate(family_info)
     )
 
-# Delete family info for a parishioner
-@family_info_router.delete("/", response_model=APIResponse)
-async def delete_family_info(
+
+# batch adding of pa
+@family_info_router.post("/batch", response_model=APIResponse)
+async def batch_update_family_info(
     parishioner_id: int,
+    family_batch: Dict[str, Any],  # Use Dict instead of Pydantic model
     session: SessionDep,
     current_user: CurrentUser,
-) -> Any:
-    """Delete family information for a parishioner, including all children."""
+) -> APIResponse:
+    """
+    Replace all existing family information of a parishioner with the new data.
+    Accepts a structured object with spouse, children, father, and mother information.
+    """
+    # Check permissions
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -190,284 +197,181 @@ async def delete_family_info(
     # Check if parishioner exists
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
-    # Get existing family info
-    family_info = session.query(FamilyInfo).filter(
-        FamilyInfo.parishioner_id == parishioner_id
-    ).first()
-    
-    if not family_info:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Family information not found for this parishioner"
-        )
-    
     try:
-        # Clear the relationship first
-        parishioner.family_info_rel = None
+        # First, check if family info exists for this parishioner
+        existing_family_info = session.query(FamilyInfo).filter(
+            FamilyInfo.parishioner_id == parishioner_id
+        ).first()
         
-        # Children will be deleted automatically due to CASCADE delete in database
-        # Delete the family info
-        session.delete(family_info)
+        # Delete existing family info (children will be deleted via CASCADE)
+        if existing_family_info:
+            session.delete(existing_family_info)
+            session.commit()
+        
+        # Create new family info object
+        new_family_info = FamilyInfo(parishioner_id=parishioner_id)
+        
+        # Handle spouse information
+        if 'spouse' in family_batch:
+            if family_batch['spouse']:
+                spouse_data = family_batch['spouse']
+                new_family_info.spouse_name = spouse_data.get('name')
+                
+                # Safely handle status value
+                spouse_status = spouse_data.get('status')
+                if spouse_status:
+                    try:
+                        new_family_info.spouse_status = ParentalStatus(spouse_status.lower())
+                    except (ValueError, AttributeError):
+                        new_family_info.spouse_status = ParentalStatus.UNKNOWN
+                
+                new_family_info.spouse_phone = spouse_data.get('phone')
+            else:
+                # If spouse is null/None, explicitly set spouse fields to None
+                new_family_info.spouse_name = None
+                new_family_info.spouse_status = None
+                new_family_info.spouse_phone = None
+        
+        # Handle father information
+        if 'father' in family_batch:
+            if family_batch['father']:
+                father_data = family_batch['father']
+                new_family_info.father_name = father_data.get('name')
+                
+                # Safely handle status value
+                father_status = father_data.get('status')
+                if father_status:
+                    try:
+                        new_family_info.father_status = ParentalStatus(father_status.lower())
+                    except (ValueError, AttributeError):
+                        new_family_info.father_status = ParentalStatus.UNKNOWN
+            else:
+                # If father is null/None, explicitly set father fields to None
+                new_family_info.father_name = None
+                new_family_info.father_status = None
+        
+        # Handle mother information
+        if 'mother' in family_batch:
+            if family_batch['mother']:
+                mother_data = family_batch['mother']
+                new_family_info.mother_name = mother_data.get('name')
+                
+                # Safely handle status value
+                mother_status = mother_data.get('status')
+                if mother_status:
+                    try:
+                        new_family_info.mother_status = ParentalStatus(mother_status.lower())
+                    except (ValueError, AttributeError):
+                        new_family_info.mother_status = ParentalStatus.UNKNOWN
+            else:
+                # If mother is null/None, explicitly set mother fields to None
+                new_family_info.mother_name = None
+                new_family_info.mother_status = None
+        
+        # Add family info to session
+        session.add(new_family_info)
+        session.flush()  # Flush to get ID for children
+        
+        # Handle children information
+        if 'children' in family_batch and family_batch['children']:
+            for child_data in family_batch['children']:
+                child = Child(
+                    family_info_id=new_family_info.id,
+                    name=child_data.get('name', '')
+                )
+                session.add(child)
+        
+        # Commit changes
         session.commit()
         
+        # Refresh to get updated data
+        session.refresh(new_family_info)
+        
+        # Build response in the same format as the request
+        response_data = {
+            "spouse": None,
+            "children": [],
+            "father": None,
+            "mother": None
+        }
+        
+        # Add spouse info to response
+        if new_family_info.spouse_name:
+            status_value = None
+            if new_family_info.spouse_status:
+                if hasattr(new_family_info.spouse_status, 'value'):
+                    status_value = new_family_info.spouse_status.value
+                else:
+                    status_value = str(new_family_info.spouse_status)
+                    
+            response_data["spouse"] = {
+                "name": new_family_info.spouse_name,
+                "status": status_value,
+                "phone": new_family_info.spouse_phone
+            }
+        
+        # Add father info to response
+        if new_family_info.father_name:
+            status_value = None
+            if new_family_info.father_status:
+                if hasattr(new_family_info.father_status, 'value'):
+                    status_value = new_family_info.father_status.value
+                else:
+                    status_value = str(new_family_info.father_status)
+                    
+            response_data["father"] = {
+                "name": new_family_info.father_name,
+                "status": status_value
+            }
+        
+        # Add mother info to response
+        if new_family_info.mother_name:
+            status_value = None
+            if new_family_info.mother_status:
+                if hasattr(new_family_info.mother_status, 'value'):
+                    status_value = new_family_info.mother_status.value
+                else:
+                    status_value = str(new_family_info.mother_status)
+                    
+            response_data["mother"] = {
+                "name": new_family_info.mother_name,
+                "status": status_value
+            }
+        
+        # Add children to response
+        children = session.query(Child).filter(
+            Child.family_info_id == new_family_info.id
+        ).all()
+        
+        response_data["children"] = [{"name": child.name} for child in children]
+        
         return APIResponse(
-            message="Family information deleted successfully",
-            data=None
+            message="Family information updated successfully",
+            data=response_data
         )
         
+    except ValueError as e:
+        session.rollback()
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         session.rollback()
-        logger.error(f"Error deleting family information: {str(e)}")
+        logger.error(f"Error updating family information: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+    
 
-# Add a child to family info
-@family_info_router.post("/children", response_model=APIResponse)
-async def add_child(
-    *,
-    parishioner_id: int,
-    child_in: ChildCreate,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> Any:
-    """Add a child to a parishioner's family information."""
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
-    # Check if parishioner exists
-    parishioner = get_parishioner_or_404(session, parishioner_id)
-    
-    # Get family info
-    family_info = session.query(FamilyInfo).filter(
-        FamilyInfo.parishioner_id == parishioner_id
-    ).first()
-    
-    if not family_info:
-        # Create family info if it doesn't exist
-        family_info = FamilyInfo(parishioner_id=parishioner_id)
-        session.add(family_info)
-        session.commit()
-        session.refresh(family_info)
-    
-    try:
-        # Create new child
-        new_child = Child(
-            family_info_id=family_info.id,
-            name=child_in.name
-        )
-        
-        session.add(new_child)
-        session.commit()
-        session.refresh(new_child)
-        
-        return APIResponse(
-            message="Child added successfully",
-            data=ChildRead.model_validate(new_child)
-        )
-        
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Error adding child: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
 
-# Update a child's information
-@family_info_router.put("/children/{child_id}", response_model=APIResponse)
-async def update_child(
-    *,
-    parishioner_id: int,
-    session: SessionDep,
-    current_user: CurrentUser,
-    child_id: int = FastAPIPath(..., title="The ID of the child to update"),
-    child_in: ChildUpdate,
-) -> Any:
-    """Update a child's information."""
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
-    # Check if parishioner exists
-    parishioner = get_parishioner_or_404(session, parishioner_id)
-    
-    # Get family info
-    family_info = session.query(FamilyInfo).filter(
-        FamilyInfo.parishioner_id == parishioner_id
-    ).first()
-    
-    if not family_info:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Family information not found for this parishioner"
-        )
-    
-    # Get the child
-    child = session.query(Child).filter(
-        Child.id == child_id,
-        Child.family_info_id == family_info.id
-    ).first()
-    
-    if not child:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Child not found"
-        )
-    
-    try:
-        # Update child
-        child.name = child_in.name
-        
-        session.commit()
-        session.refresh(child)
-        
-        return APIResponse(
-            message="Child updated successfully",
-            data=ChildRead.model_validate(child)
-        )
-        
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Error updating child: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
 
-# Delete a child
-@family_info_router.delete("/children/{child_id}", response_model=APIResponse)
-async def delete_child(
-    parishioner_id: int,
-    session: SessionDep,
-    current_user: CurrentUser,
-    child_id: int = FastAPIPath(..., title="The ID of the child to delete"),
-) -> Any:
-    """Delete a child from a parishioner's family information."""
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
-    # Check if parishioner exists
-    parishioner = get_parishioner_or_404(session, parishioner_id)
-    
-    # Get family info
-    family_info = session.query(FamilyInfo).filter(
-        FamilyInfo.parishioner_id == parishioner_id
-    ).first()
-    
-    if not family_info:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Family information not found for this parishioner"
-        )
-    
-    # Get the child
-    child = session.query(Child).filter(
-        Child.id == child_id,
-        Child.family_info_id == family_info.id
-    ).first()
-    
-    if not child:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Child not found"
-        )
-    
-    try:
-        # Delete child
-        session.delete(child)
-        session.commit()
-        
-        return APIResponse(
-            message="Child deleted successfully",
-            data=None
-        )
-        
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Error deleting child: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
 
-# Get all children for a parishioner
-@family_info_router.get("/children", response_model=APIResponse)
-async def get_children(
-    parishioner_id: int,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> Any:
-    """Get all children for a parishioner."""
-    # Check if parishioner exists
-    parishioner = get_parishioner_or_404(session, parishioner_id)
-    
-    # Get family info
-    family_info = session.query(FamilyInfo).filter(
-        FamilyInfo.parishioner_id == parishioner_id
-    ).first()
-    
-    if not family_info:
-        return APIResponse(
-            message="No family information found for this parishioner",
-            data=[]
-        )
-    
-    # Get children
-    children = session.query(Child).filter(
-        Child.family_info_id == family_info.id
-    ).all()
-    
-    return APIResponse(
-        message=f"Retrieved {len(children)} children",
-        data=[ChildRead.model_validate(child) for child in children]
-    )
 
-# Get a specific child
-@family_info_router.get("/children/{child_id}", response_model=APIResponse)
-async def get_child(
-    parishioner_id: int,
-    session: SessionDep,
-    current_user: CurrentUser,
-    child_id: int = FastAPIPath(..., title="The ID of the child to get"),
-) -> Any:
-    """Get a specific child by ID."""
-    # Check if parishioner exists
-    parishioner = get_parishioner_or_404(session, parishioner_id)
-    
-    # Get family info
-    family_info = session.query(FamilyInfo).filter(
-        FamilyInfo.parishioner_id == parishioner_id
-    ).first()
-    
-    if not family_info:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Family information not found for this parishioner"
-        )
-    
-    # Get the child
-    child = session.query(Child).filter(
-        Child.id == child_id,
-        Child.family_info_id == family_info.id
-    ).first()
-    
-    if not child:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Child not found"
-        )
-    
-    return APIResponse(
-        message="Child retrieved successfully",
-        data=ChildRead.model_validate(child)
-    )
+
+
