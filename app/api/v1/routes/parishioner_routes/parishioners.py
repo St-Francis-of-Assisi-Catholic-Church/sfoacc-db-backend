@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # create single parishioner
-@router.post("/", response_model=APIResponse)
+@router.post("", response_model=APIResponse)
 async def create_parishioner(
     *,
     session: SessionDep,
