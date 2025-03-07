@@ -279,6 +279,101 @@ async def update_parishioner(
         )
 
 
+# generate churchID
+@router.post("/{parishioner_id}/generate-church-id", response_model=APIResponse)
+async def generate_church_id(
+    *,
+    session: SessionDep,
+    parishioner_id: int,
+    old_church_id: str = Query(..., description="Old church ID to be incorporated into the new ID"),
+    current_user: CurrentUser,
+) -> Any:
+    """
+    Generate a new church ID for a parishioner.
+    
+    Format: first_name_initial + last_name_initial + day_of_birth(2 digits) + 
+    month_of_birth(2 digits) + "-" + old_church_id
+    
+    Example: Kofi Maxwell Nkrumah, DOB: 30/01/2005, Old ID: 045
+    New church ID: KN3001-045
+    """
+    if current_user.role not in ["super_admin", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Get existing parishioner
+    parishioner = session.query(ParishionerModel).filter(
+        ParishionerModel.id == parishioner_id
+    ).first()
+    
+    if not parishioner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parishioner not found"
+        )
+    
+    # Check required fields are present
+    if not parishioner.first_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="First name is required to generate church ID"
+        )
+    
+    if not parishioner.last_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Last name is required to generate church ID"
+        )
+    
+    if not parishioner.date_of_birth:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Date of birth is required to generate church ID"
+        )
+    
+    if not old_church_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Old church ID is required to generate new church ID"
+        )
+    
+    try:
+        # Generate new church ID
+        first_name_initial = parishioner.first_name[0].upper()
+        last_name_initial = parishioner.last_name[0].upper()
+        
+        # Format day and month with leading zeros if needed
+        day_of_birth = f"{parishioner.date_of_birth.day:02d}"
+        month_of_birth = f"{parishioner.date_of_birth.month:02d}"
+        
+        new_church_id = f"{first_name_initial}{last_name_initial}{day_of_birth}{month_of_birth}-{old_church_id}"
+        
+        # Update parishioner with new and old church IDs
+        parishioner.new_church_id = new_church_id
+        parishioner.old_church_id = old_church_id
+        
+        session.commit()
+        session.refresh(parishioner)
+        
+        return APIResponse(
+            message="Church ID generated successfully",
+            data={
+                "parishioner_id": parishioner.id,
+                "old_church_id": parishioner.old_church_id,
+                "new_church_id": parishioner.new_church_id
+            }
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error generating church ID: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
 
 
 # parishioner occupation
