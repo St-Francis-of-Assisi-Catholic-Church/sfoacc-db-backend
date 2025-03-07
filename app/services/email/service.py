@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr
 from app.core.config import settings
 from app.services.email.template import WelcomeEmailTemplate, EmailTemplateContext
 from app.services.email.template.church_id_confirmation import ChurchIDConfirmationTemplate, ChurchIDEmailContext
+from app.services.email.template.verify_parishioner_details import VerificationMessageContext, VerificationMessageTemplate
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -112,6 +113,46 @@ class EmailService:
         
         except Exception as e:
             logger.error(f"Failed to send church ID confirmation email to {email}: {str(e)}")
+            return False
+        
+
+
+    async def send_verification_message(
+        self,
+        email: str,
+        parishioner_name: str,
+        verification_link: str,
+        access_code: str
+    ) -> bool:
+        try:
+            # Create context
+            context = VerificationMessageContext(
+                email=email,
+                full_name=parishioner_name,  # Required by base class
+                parishioner_name=parishioner_name,
+                verification_link=verification_link,
+                access_code=access_code,
+                temp_password=None  # Required by base class but not used
+            )
+            
+            # Render template
+            template = VerificationMessageTemplate.render(context)
+            
+            # Create message
+            message = MessageSchema(
+                subject=template["subject"],
+                recipients=[email],
+                body=template["html_content"],
+                subtype="html"
+            )
+            
+            # Send email
+            await self.fast_mail.send_message(message)
+            logger.info(f"Verification message email sent to {email}")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Failed to send verification message email to {email}: {str(e)}")
             return False
 
 

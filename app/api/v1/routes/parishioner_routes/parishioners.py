@@ -21,6 +21,7 @@ from app.api.v1.routes.parishioner_routes.family_info import family_info_router
 from app.api.v1.routes.parishioner_routes.sacrements import sacraments_router
 from app.api.v1.routes.parishioner_routes.skills import skills_router
 from app.api.v1.routes.parishioner_routes.file_upload import file_upload_router
+from app.api.v1.routes.parishioner_routes.verification_msg import verify_router
 
 
 # Configure logging
@@ -399,7 +400,6 @@ async def generate_church_id(
         )
 
 
-
 # parishioner occupation
 router.include_router(
     occupation_router,
@@ -430,12 +430,21 @@ router.include_router(
     prefix="/{parishioner_id}/sacraments",
 )
 
+# skills
 router.include_router(
     skills_router,
     prefix="/{parishioner_id}/skills",
 )
 
+# file upload
 router.include_router(
 file_upload_router,
 prefix="/import"
+)
+
+
+# verification msg
+router.include_router(
+verify_router,
+prefix="/verify"
 )
