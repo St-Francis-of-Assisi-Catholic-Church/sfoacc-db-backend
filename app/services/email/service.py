@@ -4,6 +4,7 @@ import logging
 from pydantic import BaseModel, EmailStr
 from app.core.config import settings
 from app.services.email.template import WelcomeEmailTemplate, EmailTemplateContext
+from app.services.email.template.church_id_confirmation import ChurchIDConfirmationTemplate, ChurchIDEmailContext
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -71,6 +72,46 @@ class EmailService:
             
         except Exception as e:
             logger.error(f"Failed to send welcome email to {email}: {str(e)}")
+            return False
+
+
+    async def send_church_id_confirmation(
+            self, 
+            email: str, 
+            parishioner_name: str, 
+            system_id: str,
+            old_church_id:str, 
+            new_church_id: str
+        ) -> bool:
+        try:
+            logger.info(f"sending conf to {email}")
+            context = ChurchIDEmailContext(
+            email=email,
+            full_name=parishioner_name,  # Required by base class
+            parishioner_name=parishioner_name,
+            system_id=system_id,
+            old_church_id=old_church_id,
+            new_church_id=new_church_id,
+            temp_password=None  # Required by base class but not used
+            )
+              # Render template
+            template = ChurchIDConfirmationTemplate.render(context)
+            
+            # Create message
+            message = MessageSchema(
+                subject=template["subject"],
+                recipients=[email],
+                body=template["html_content"],
+                subtype="html"
+            )
+            
+            # Send email
+            await self.fast_mail.send_message(message)
+            logger.info(f"Church ID confirmation email sent to {email}")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Failed to send church ID confirmation email to {email}: {str(e)}")
             return False
 
 

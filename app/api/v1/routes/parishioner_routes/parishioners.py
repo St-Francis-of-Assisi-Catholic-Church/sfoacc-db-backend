@@ -22,6 +22,7 @@ from app.api.v1.routes.parishioner_routes.sacrements import sacraments_router
 from app.api.v1.routes.parishioner_routes.skills import skills_router
 from app.api.v1.routes.parishioner_routes.file_upload import file_upload_router
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -287,6 +288,7 @@ async def generate_church_id(
     parishioner_id: int,
     old_church_id: str = Query(..., description="Old church ID to be incorporated into the new ID"),
     current_user: CurrentUser,
+    send_email: bool = Query(False, description="Whether to send confirmation email to the parishioner"),
 ) -> Any:
     """
     Generate a new church ID for a parishioner.
@@ -356,13 +358,35 @@ async def generate_church_id(
         
         session.commit()
         session.refresh(parishioner)
+
+        email_sent = False
+        if send_email:
+            if not parishioner.email_address:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Parishioner does not have email address"
+                )
+            
+            from app.services.email.service import email_service
+            parishioner_full_name = f"{parishioner.first_name} {parishioner.last_name}"
+            email_sent = await email_service.send_church_id_confirmation(
+                email=parishioner.email_address,
+                parishioner_name=parishioner_full_name,
+                system_id=str(parishioner_id),
+                old_church_id=parishioner.old_church_id,
+                new_church_id=parishioner.new_church_id
+            )
+
+
+
         
         return APIResponse(
             message="Church ID generated successfully",
             data={
                 "parishioner_id": parishioner.id,
                 "old_church_id": parishioner.old_church_id,
-                "new_church_id": parishioner.new_church_id
+                "new_church_id": parishioner.new_church_id,
+                "email_sent": email_sent
             }
         )
         
