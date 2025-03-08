@@ -1,6 +1,6 @@
 import logging
 from typing import Any, List
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +23,9 @@ from app.api.v1.routes.parishioner_routes.skills import skills_router
 from app.api.v1.routes.parishioner_routes.file_upload import file_upload_router
 from app.api.v1.routes.parishioner_routes.verification_msg import verify_router
 
+from app.services.sms.service import sms_service
+from app.services.email.service import email_service
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +40,7 @@ async def create_parishioner(
     session: SessionDep,
     parishioner_in: ParishionerCreate,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
 ) -> Any:
     """
     Create new parishioner with all related information.
@@ -58,6 +62,13 @@ async def create_parishioner(
         session.flush()  # Get ID before creating related records
         session.commit()
         session.refresh(db_parishioner)
+
+        # send welcome sms
+        background_tasks.add_task(
+            sms_service.send_welcome_message_on_create,
+            phone=parishioner_in.mobile_number,
+            parishioner_name=parishioner_in.first_name + " " + parishioner_in.last_name
+        )
 
         return APIResponse(
             message="Parishioner created successfully",
@@ -290,6 +301,8 @@ async def generate_church_id(
     old_church_id: str = Query(..., description="Old church ID to be incorporated into the new ID"),
     current_user: CurrentUser,
     send_email: bool = Query(False, description="Whether to send confirmation email to the parishioner"),
+    send_sms: bool = Query(False, description="Whether to send confirmation SMS to the parishioner"),
+    background_tasks: BackgroundTasks
 ) -> Any:
     """
     Generate a new church ID for a parishioner.
@@ -368,7 +381,7 @@ async def generate_church_id(
                     detail="Parishioner does not have email address"
                 )
             
-            from app.services.email.service import email_service
+            
             parishioner_full_name = f"{parishioner.first_name} {parishioner.last_name}"
             email_sent = await email_service.send_church_id_confirmation(
                 email=parishioner.email_address,
@@ -377,6 +390,23 @@ async def generate_church_id(
                 old_church_id=parishioner.old_church_id,
                 new_church_id=parishioner.new_church_id
             )
+
+        sms_sent = False
+        if send_sms:
+            if not parishioner.mobile_number:
+                 raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Parishioner does not have mobile number"
+                )
+        
+            parishioner_full_name = f"{parishioner.first_name} {parishioner.last_name}"
+            background_tasks.add_task(
+                sms_service.send_ID_generation_confirmation,  
+                parishioner_name=parishioner_full_name,
+                phone=parishioner.mobile_number,
+                new_church_id=parishioner.new_church_id
+            )
+
 
 
 
@@ -387,7 +417,8 @@ async def generate_church_id(
                 "parishioner_id": parishioner.id,
                 "old_church_id": parishioner.old_church_id,
                 "new_church_id": parishioner.new_church_id,
-                "email_sent": email_sent
+                "email_sent": email_sent,
+                "sms_sent":  send_sms and bool(parishioner.mobile_number)
             }
         )
         
