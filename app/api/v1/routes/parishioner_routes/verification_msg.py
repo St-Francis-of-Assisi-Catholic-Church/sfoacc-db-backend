@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, List
+from typing import Any, List, Literal
 from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks, Request, Response
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session, joinedload
@@ -9,6 +9,7 @@ from app.models.parishioner import (Parishioner as ParishionerModel, FamilyInfo)
 from app.models.verification import VerificationRecord
 from app.schemas.parishioner import APIResponse
 from app.services.email.service import email_service
+from app.services.sms.service import sms_service
 from app.services.verification.page_generator import VerificationPageGenerator
 from app.core.config import settings
 
@@ -22,9 +23,14 @@ async def send_verification_message(
     parishioner_id: int,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
+    channel: Literal["email", "sms", "both"] = "both",
 ) -> Any:
     """
-    Send a verification message to a parishioner with their complete details.
+     Send a verification message to a parishioner with their complete details.
+    
+    Parameters:
+    - parishioner_id: ID of the parishioner to send verification to
+    - channel: Communication channel to use (email, sms, or both)
     """
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
@@ -49,12 +55,25 @@ async def send_verification_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parishioner not found"
         )
-        
-    if not parishioner.email_address:
+    
+     # Validate contact information based on selected channel
+    if channel in ["email", "both"] and not parishioner.email_address:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Parishioner does not have an email address"
         )
+    
+    if channel in ["sms", "both"] and not parishioner.mobile_number :
+        if channel == "sms":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Parishioner does not have a phone number"
+            )
+        else:
+            # For "both" channel, just note that SMS won't be sent
+            channel = "email"
+        
+   
     
     # Generate verification page HTML
     verification_data = VerificationPageGenerator.generate_page(parishioner)
@@ -89,22 +108,58 @@ async def send_verification_message(
     # Get parishioner name
     parishioner_name = f"{parishioner.first_name} {parishioner.last_name}"
     
+     # Response data
+    response_data = {
+        "parishioner_id": parishioner.id,
+        "verification_link": verification_link,
+        "channels_sent": []
+    }
+
+      # Send via appropriate channels
+    if channel in ["email", "both"] and parishioner.email_address:
+        background_tasks.add_task(
+            email_service.send_verification_message,
+            email=parishioner.email_address,
+            parishioner_name=parishioner_name,
+            verification_link=verification_link,
+            access_code=verification_data["access_code"]
+        )
+        response_data["email"] = parishioner.email_address
+        response_data["channels_sent"].append("email")
+
+    if channel in ["sms", "both"] and parishioner.mobile_number:
+        background_tasks.add_task(
+            sms_service.send_verification_message,
+            phone=parishioner.mobile_number,
+            parishioner_name=parishioner_name,
+            verification_link=verification_link,
+            access_code=verification_data["access_code"]
+        )
+        response_data["phone"] = parishioner.mobile_number
+        response_data["channels_sent"].append("sms")
+
+
     # Send verification email in the background
-    background_tasks.add_task(
-        email_service.send_verification_message,
-        email=parishioner.email_address,
-        parishioner_name=parishioner_name,
-        verification_link=verification_link,
-        access_code=""  # We don't need to send the access code in the email anymore
-    )
+    # background_tasks.add_task(
+    #     email_service.send_verification_message,
+    #     email=parishioner.email_address,
+    #     parishioner_name=parishioner_name,
+    #     verification_link=verification_link,
+    #     access_code=""  # We don't need to send the access code in the email anymore
+    # )
     
+    # return APIResponse(
+    #     message="Verification message sent successfully",
+    #     data={
+    #         "parishioner_id": parishioner.id,
+    #         "email": parishioner.email_address,
+    #         "verification_link": verification_link
+    #     }
+    # )
+
     return APIResponse(
-        message="Verification message sent successfully",
-        data={
-            "parishioner_id": parishioner.id,
-            "email": parishioner.email_address,
-            "verification_link": verification_link
-        }
+        message=f"Verification message sent via {', '.join(response_data['channels_sent'])}",
+        data=response_data
     )
 
 

@@ -206,7 +206,7 @@ class ParishionerBase(BaseModel):
     region: Optional[str] = None
     country: Optional[str] = None
     marital_status: Optional[MaritalStatus] = MaritalStatus.SINGLE
-    mobile_number: Optional[str] = None
+    mobile_number: str
     whatsapp_number: Optional[str] = None
     email_address: Optional[EmailStr] = None
     place_of_worship: Optional[str] = None
