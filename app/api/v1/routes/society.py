@@ -221,7 +221,7 @@ async def create_new_society(
             detail=str(e)
         )
 
-@router.get("", response_model=APIResponse)
+@router.get("/all", response_model=APIResponse)
 async def read_societies(
     *,
     session: SessionDep,
