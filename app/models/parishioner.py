@@ -99,6 +99,8 @@ class Parishioner(Base):
     sacraments_rel = db_relationship("Sacrament", back_populates="parishioner_ref")
     skills_rel = db_relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
     languages_rel = db_relationship("Language", secondary=parishioner_languages, back_populates="parishioners_ref")
+    # societies
+    societies = db_relationship("Society", secondary="par_society_members", back_populates="members")
 
 class Occupation(Base):
     __tablename__ = "par_occupations"
