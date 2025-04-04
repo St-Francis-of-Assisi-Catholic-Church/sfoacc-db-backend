@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import (Parishioner as ParishionerModel, FamilyInfo)
 from app.models.verification import VerificationRecord
-from app.schemas.parishioner import APIResponse
+from app.schemas.common import APIResponse
 from app.services.email.service import email_service
 from app.services.sms.service import sms_service
 from app.services.verification.page_generator import VerificationPageGenerator

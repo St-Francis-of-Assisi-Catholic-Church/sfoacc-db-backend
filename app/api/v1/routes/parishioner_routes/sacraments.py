@@ -7,8 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import and_
 
 from app.api.deps import SessionDep, CurrentUser
-from app.models.parishioner import Parishioner, Sacrament, SacramentType
-from app.schemas.parishioner import SacramentCreate, SacramentRead, SacramentUpdate, APIResponse
+from app.models.parishioner import Parishioner, ParSacrament, ParSacramentType
+from app.schemas.common import APIResponse
+from app.schemas.parishioner import ParSacramentCreate, ParSacramentRead, SacramentUpdate
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,8 +45,8 @@ async def get_sacrament_summary(
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
     # Get all sacraments for this parishioner
-    sacraments = session.query(Sacrament.type).filter(
-        Sacrament.parishioner_id == parishioner_id
+    sacraments = session.query(ParSacrament.type).filter(
+        ParSacrament.parishioner_id == parishioner_id
     ).all()
     
     # Extract sacrament types
@@ -54,7 +55,7 @@ async def get_sacrament_summary(
     # Create a summary dictionary with all possible sacrament types
     summary = {
         sacrament_type.value: sacrament_type in received_sacrament_types
-        for sacrament_type in SacramentType
+        for sacrament_type in ParSacramentType
     }
     
     return APIResponse(
@@ -67,7 +68,7 @@ async def get_sacrament_summary(
 async def add_or_update_sacrament(
     *,
     parishioner_id: int,
-    sacrament_in: SacramentCreate,
+    sacrament_in: ParSacramentCreate,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -83,10 +84,10 @@ async def add_or_update_sacrament(
     
     try:
         # Check if this sacrament type already exists for this parishioner
-        existing_sacrament = session.query(Sacrament).filter(
+        existing_sacrament = session.query(ParSacrament).filter(
             and_(
-                Sacrament.parishioner_id == parishioner_id,
-                Sacrament.type == sacrament_in.type
+                ParSacrament.parishioner_id == parishioner_id,
+                ParSacrament.type == sacrament_in.type
             )
         ).first()
         
@@ -101,11 +102,11 @@ async def add_or_update_sacrament(
             
             return APIResponse(
                 message=f"{sacrament_in.type.value} sacrament updated successfully",
-                data=SacramentRead.model_validate(existing_sacrament)
+                data=ParSacramentRead.model_validate(existing_sacrament)
             )
         else:
             # Create new sacrament
-            new_sacrament = Sacrament(
+            new_sacrament = ParSacrament(
                 parishioner_id=parishioner_id,
                 type=sacrament_in.type,
                 date=sacrament_in.date,
@@ -122,7 +123,7 @@ async def add_or_update_sacrament(
             
             return APIResponse(
                 message=f"{sacrament_in.type.value} sacrament added successfully",
-                data=SacramentRead.model_validate(new_sacrament)
+                data=ParSacramentRead.model_validate(new_sacrament)
             )
             
     except IntegrityError as e:
@@ -152,13 +153,13 @@ async def get_sacraments(
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
     # Get sacraments
-    sacraments = session.query(Sacrament).filter(
-        Sacrament.parishioner_id == parishioner_id
+    sacraments = session.query(ParSacrament).filter(
+        ParSacrament.parishioner_id == parishioner_id
     ).all()
     
     return APIResponse(
         message=f"Retrieved {len(sacraments)} sacraments",
-        data=[SacramentRead.model_validate(sacrament) for sacrament in sacraments]
+        data=[ParSacramentRead.model_validate(sacrament) for sacrament in sacraments]
     )
 
 # Get a specific sacrament by type
@@ -167,17 +168,17 @@ async def get_sacrament_by_type(
     parishioner_id: int,
     session: SessionDep,
     current_user: CurrentUser,
-    sacrament_type: SacramentType,
+    sacrament_type: ParSacramentType,
 ) -> Any:
     """Get a specific sacrament by type."""
     # Check if parishioner exists
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
     # Get the specific sacrament
-    sacrament = session.query(Sacrament).filter(
+    sacrament = session.query(ParSacrament).filter(
         and_(
-            Sacrament.parishioner_id == parishioner_id,
-            Sacrament.type == sacrament_type
+            ParSacrament.parishioner_id == parishioner_id,
+            ParSacrament.type == sacrament_type
         )
     ).first()
     
@@ -189,7 +190,7 @@ async def get_sacrament_by_type(
     
     return APIResponse(
         message=f"{sacrament_type.value} sacrament retrieved successfully",
-        data=SacramentRead.model_validate(sacrament)
+        data=ParSacramentRead.model_validate(sacrament)
     )
 
 # Get a specific sacrament by ID
@@ -205,10 +206,10 @@ async def get_sacrament(
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
     # Get the specific sacrament
-    sacrament = session.query(Sacrament).filter(
+    sacrament = session.query(ParSacrament).filter(
         and_(
-            Sacrament.id == sacrament_id,
-            Sacrament.parishioner_id == parishioner_id
+            ParSacrament.id == sacrament_id,
+            ParSacrament.parishioner_id == parishioner_id
         )
     ).first()
     
@@ -220,7 +221,7 @@ async def get_sacrament(
     
     return APIResponse(
         message="Sacrament retrieved successfully",
-        data=SacramentRead.model_validate(sacrament)
+        data=ParSacramentRead.model_validate(sacrament)
     )
 
 # Update a sacrament
@@ -244,10 +245,10 @@ async def update_sacrament(
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
     # Get existing sacrament
-    sacrament = session.query(Sacrament).filter(
+    sacrament = session.query(ParSacrament).filter(
         and_(
-            Sacrament.id == sacrament_id,
-            Sacrament.parishioner_id == parishioner_id
+            ParSacrament.id == sacrament_id,
+            ParSacrament.parishioner_id == parishioner_id
         )
     ).first()
     
@@ -264,16 +265,16 @@ async def update_sacrament(
         if not update_data:
             return APIResponse(
                 message="No fields to update",
-                data=SacramentRead.model_validate(sacrament)
+                data=ParSacramentRead.model_validate(sacrament)
             )
         
         # If type is being updated, check for duplicates
         if 'type' in update_data and update_data['type'] != sacrament.type:
             # Check if this new sacrament type already exists for this parishioner
-            existing_sacrament = session.query(Sacrament).filter(
+            existing_sacrament = session.query(ParSacrament).filter(
                 and_(
-                    Sacrament.parishioner_id == parishioner_id,
-                    Sacrament.type == update_data['type']
+                    ParSacrament.parishioner_id == parishioner_id,
+                    ParSacrament.type == update_data['type']
                 )
             ).first()
             
@@ -292,7 +293,7 @@ async def update_sacrament(
         
         return APIResponse(
             message="Sacrament updated successfully",
-            data=SacramentRead.model_validate(sacrament)
+            data=ParSacramentRead.model_validate(sacrament)
         )
         
     except Exception as e:
@@ -322,10 +323,10 @@ async def delete_sacrament(
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
     # Get existing sacrament
-    sacrament = session.query(Sacrament).filter(
+    sacrament = session.query(ParSacrament).filter(
         and_(
-            Sacrament.id == sacrament_id,
-            Sacrament.parishioner_id == parishioner_id
+            ParSacrament.id == sacrament_id,
+            ParSacrament.parishioner_id == parishioner_id
         )
     ).first()
     
@@ -363,7 +364,7 @@ async def delete_sacrament(
 @sacraments_router.delete("/type/{sacrament_type}", response_model=APIResponse)
 async def delete_sacrament_by_type(
     parishioner_id: int,
-    sacrament_type: SacramentType,
+    sacrament_type: ParSacramentType,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -378,10 +379,10 @@ async def delete_sacrament_by_type(
     parishioner = get_parishioner_or_404(session, parishioner_id)
     
     # Get existing sacrament
-    sacrament = session.query(Sacrament).filter(
+    sacrament = session.query(ParSacrament).filter(
         and_(
-            Sacrament.parishioner_id == parishioner_id,
-            Sacrament.type == sacrament_type
+            ParSacrament.parishioner_id == parishioner_id,
+            ParSacrament.type == sacrament_type
         )
     ).first()
     
@@ -420,7 +421,7 @@ async def delete_sacrament_by_type(
 @sacraments_router.post("/batch", response_model=APIResponse)
 async def batch_update_sacraments(
     parishioner_id: int,
-    batch_data: List[SacramentCreate],
+    batch_data: List[ParSacramentCreate],
     session: SessionDep,
     current_user: CurrentUser,
 ) -> APIResponse:
@@ -440,8 +441,8 @@ async def batch_update_sacraments(
     
     try:
         # Delete all existing sacraments for this parishioner
-        session.query(Sacrament).filter(
-            Sacrament.parishioner_id == parishioner_id
+        session.query(ParSacrament).filter(
+            ParSacrament.parishioner_id == parishioner_id
         ).delete()
         
         # Validate no duplicate sacrament types in the request
@@ -455,7 +456,7 @@ async def batch_update_sacraments(
         # Create new sacraments
         new_sacraments = []
         for sacrament_data in batch_data:
-            new_sacrament = Sacrament(
+            new_sacrament = ParSacrament(
                 parishioner_id=parishioner_id,
                 type=sacrament_data.type,
                 date=sacrament_data.date,
@@ -476,7 +477,7 @@ async def batch_update_sacraments(
         
         return APIResponse(
             message=f"Successfully replaced sacraments for parishioner. Now has {len(new_sacraments)} sacraments.",
-            data=[SacramentRead.model_validate(sacrament) for sacrament in new_sacraments]
+            data=[ParSacramentRead.model_validate(sacrament) for sacrament in new_sacraments]
         )
         
     except ValueError as e:

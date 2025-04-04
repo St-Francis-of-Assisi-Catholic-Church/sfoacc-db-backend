@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import date, datetime
 from typing import Any, Optional, List
 from enum import Enum
-from app.models.parishioner import MembershipStatus, SacramentType, Gender, ParentalStatus, MaritalStatus, VerificationStatus 
+from app.models.parishioner import MembershipStatus, ParSacramentType, Gender, ParentalStatus, MaritalStatus, VerificationStatus 
 
 # Base Schemas
 class OccupationBase(BaseModel):
@@ -22,8 +22,8 @@ class MedicalConditionBase(BaseModel):
     condition: str
     notes: Optional[str] = None
 
-class SacramentBase(BaseModel):
-    type: SacramentType
+class ParSacramentBase(BaseModel):
+    type: ParSacramentType
     date: datetime
     place: str
     minister: str
@@ -45,7 +45,7 @@ class EmergencyContactCreate(EmergencyContactBase):
 class MedicalConditionCreate(MedicalConditionBase):
     pass
 
-class SacramentCreate(SacramentBase):
+class ParSacramentCreate(ParSacramentBase):
     pass
 
 class SkillCreate(SkillBase):
@@ -87,7 +87,7 @@ class MedicalConditionRead(MedicalConditionBase):
     class Config:
         from_attributes = True
 
-class SacramentRead(SacramentBase):
+class ParSacramentRead(ParSacramentBase):
     id: int
     parishioner_id: int
     created_at: datetime
@@ -121,7 +121,7 @@ class MedicalConditionUpdate(BaseModel):
     notes: Optional[str] = None
 
 class SacramentUpdate(BaseModel):
-    type: Optional[SacramentType] = None
+    type: Optional[ParSacramentType] = None
     date: Optional[datetime] = None
     place: Optional[str] = None
     minister: Optional[str] = None
@@ -257,14 +257,10 @@ class ParishionerDetailedRead(ParishionerRead):
     occupation: Optional[OccupationRead] = None
     emergency_contacts: List[EmergencyContactRead] = []
     medical_conditions: List[MedicalConditionRead] = []
-    sacraments: List[SacramentRead] = []
+    sacraments: List[ParSacramentRead] = []
     skills: List[SkillRead] = []
     # languages: List[]
 
     class Config:
         from_attributes = True
 
-# Response Models
-class APIResponse(BaseModel):
-    message: str
-    data: Any | None

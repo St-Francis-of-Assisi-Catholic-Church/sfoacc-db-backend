@@ -6,9 +6,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import Parishioner, FamilyInfo, Child, ParentalStatus
+from app.schemas.common import APIResponse
 from app.schemas.parishioner import (
     FamilyInfoBatch, FamilyInfoRead, FamilyInfoUpdate, ChildCreate,
-    ChildRead, ChildUpdate, APIResponse
+    ChildRead, ChildUpdate
 )
 
 # Configure logging

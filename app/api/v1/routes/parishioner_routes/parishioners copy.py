@@ -12,6 +12,7 @@ from app.models.parishioner import (
     EmergencyContact, MedicalCondition, Sacrament,
     Skill, Child
 )
+from app.schemas.common import APIResponse
 from app.schemas.parishioner import *
 
 # Configure logging

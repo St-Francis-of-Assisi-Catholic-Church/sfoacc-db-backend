@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 from app.models.parishioner import ( Parishioner as
     ParishionerModel , Occupation, FamilyInfo,
-    EmergencyContact, MedicalCondition, Sacrament, Skill, Child
+    EmergencyContact, MedicalCondition, ParSacrament, Skill, Child
 )
 from .page_template import verification_page_template
 
@@ -131,8 +131,8 @@ class VerificationPageGenerator:
         
         # Sacraments Information
         sacraments_html = ""
-        if parishioner.sacraments_rel:
-            for sacrament in parishioner.sacraments_rel:
+        if parishioner.par_sacraments_rel:
+            for sacrament in parishioner.par_sacraments_rel:
                 sacrament_html = cls._format_detail_section([
                     {"label": "Type", "value": sacrament.type.value if sacrament.type else None},
                     {"label": "Date", "value": sacrament.date},

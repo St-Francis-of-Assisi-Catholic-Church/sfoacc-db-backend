@@ -6,7 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import Parishioner, Occupation
-from app.schemas.parishioner import OccupationCreate, OccupationRead, OccupationUpdate, APIResponse
+from app.schemas.common import APIResponse
+from app.schemas.parishioner import OccupationCreate, OccupationRead, OccupationUpdate
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

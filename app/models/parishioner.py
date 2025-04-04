@@ -32,7 +32,7 @@ class ParentalStatus(str, enum.Enum):
     DECEASED = "deceased"
     UNKNOWN = "unknown"
 
-class SacramentType(str, enum.Enum):
+class ParSacramentType(str, enum.Enum):
     BAPTISM = "Baptism"
     FIRST_COMMUNION = "First Holy Communion"
     CONFIRMATION = "Confirmation"
@@ -96,7 +96,7 @@ class Parishioner(Base):
     family_info_rel = db_relationship("FamilyInfo", back_populates="parishioner_ref", uselist=False)
     emergency_contacts_rel = db_relationship("EmergencyContact", back_populates="parishioner_ref")
     medical_conditions_rel = db_relationship("MedicalCondition", back_populates="parishioner_ref")
-    sacraments_rel = db_relationship("Sacrament", back_populates="parishioner_ref")
+    par_sacraments_rel = db_relationship("ParSacrament", back_populates="parishioner_ref")
     skills_rel = db_relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
     languages_rel = db_relationship("Language", secondary=parishioner_languages, back_populates="parishioners_ref")
     # societies
@@ -183,17 +183,17 @@ class MedicalCondition(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
-class Sacrament(Base):
+class ParSacrament(Base):
     __tablename__ = "par_sacraments"
 
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
-    type = Column(Enum(SacramentType), nullable=False)
+    type = Column(Enum(ParSacramentType), nullable=False)
     date = Column(Date, nullable=False)
     place = Column(String, nullable=False)
     minister = Column(String, nullable=False)
 
-    parishioner_ref = db_relationship("Parishioner", back_populates="sacraments_rel")
+    parishioner_ref = db_relationship("Parishioner", back_populates="par_sacraments_rel")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())

@@ -7,8 +7,8 @@ from typing import Dict, List, Any, Optional
 
 from app.models.parishioner import (
     Parishioner, Occupation, FamilyInfo, Child, 
-    EmergencyContact, MedicalCondition, Sacrament, Skill, Language,
-    Gender, MaritalStatus, ParentalStatus, VerificationStatus, MembershipStatus, SacramentType
+    EmergencyContact, MedicalCondition, ParSacrament, Skill, Language,
+    Gender, MaritalStatus, ParentalStatus, VerificationStatus, MembershipStatus, ParSacramentType
 )
 
 # Configure logging
@@ -166,22 +166,22 @@ class ParishionerImportService:
             sacrament_str = sacrament_str.upper()
             
             if "BAPTISM" in sacrament_str:
-                sacrament_type = SacramentType.BAPTISM
+                sacrament_type = ParSacramentType.BAPTISM
             elif "COMMUNION" in sacrament_str:
-                sacrament_type = SacramentType.FIRST_COMMUNION
+                sacrament_type = ParSacramentType.FIRST_COMMUNION
             elif "CONFIRMATION" in sacrament_str:
-                sacrament_type = SacramentType.CONFIRMATION
+                sacrament_type = ParSacramentType.CONFIRMATION
             elif "PENANCE" in sacrament_str:
-                sacrament_type = SacramentType.PENANCE
+                sacrament_type = ParSacramentType.PENANCE
             elif "ANOINTING" in sacrament_str:
-                sacrament_type = SacramentType.ANOINTING
+                sacrament_type = ParSacramentType.ANOINTING
             elif "ORDERS" in sacrament_str:
-                sacrament_type = SacramentType.HOLY_ORDERS
+                sacrament_type = ParSacramentType.HOLY_ORDERS
             elif "MATRIMONY" in sacrament_str or "MARRIAGE" in sacrament_str:
-                sacrament_type = SacramentType.MATRIMONY
+                sacrament_type = ParSacramentType.MATRIMONY
             
             if sacrament_type:
-                sacrament = Sacrament(
+                sacrament = ParSacrament(
                     parishioner_id=parishioner_id,
                     type=sacrament_type,
                     date=datetime.now().date(),  # Default to today since we don't have actual date
@@ -339,7 +339,7 @@ class ParishionerImportService:
 
             
             # Process sacraments
-            self.process_sacraments(parishioner.id, row.get("Church Sacrements", ""))
+            self.process_sacraments(parishioner.id, row.get("Church sacraments", ""))
             
             self.db.commit()
             return {"success": True, "parishioner_id": parishioner.id}

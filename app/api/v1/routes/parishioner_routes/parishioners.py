@@ -1,24 +1,25 @@
 import logging
 from typing import Any, List
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Query
-from sqlalchemy import func
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import (
     Parishioner as ParishionerModel,
-     Occupation, FamilyInfo,
-    EmergencyContact, MedicalCondition, Sacrament,
+    Occupation, FamilyInfo,
+    EmergencyContact, MedicalCondition,
     Skill, Child
 )
+from app.schemas.common import APIResponse
 from app.schemas.parishioner import *
 
 from app.api.v1.routes.parishioner_routes.occupation import occupation_router
 from app.api.v1.routes.parishioner_routes.emergency_contacts import emergency_contacts_router
 from app.api.v1.routes.parishioner_routes.medical_conditions import medical_conditions_router
 from app.api.v1.routes.parishioner_routes.family_info import family_info_router
-from app.api.v1.routes.parishioner_routes.sacrements import sacraments_router
+from app.api.v1.routes.parishioner_routes.sacraments import sacraments_router
 from app.api.v1.routes.parishioner_routes.skills import skills_router
 from app.api.v1.routes.parishioner_routes.file_upload import file_upload_router
 from app.api.v1.routes.parishioner_routes.verification_msg import verify_router
@@ -93,26 +94,46 @@ async def create_parishioner(
 # Get all parishioners
 @router.get("/all", response_model=APIResponse)
 async def get_all_parishioners(
+    *,
     session: SessionDep,
     current_user: CurrentUser,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100)
+    limit: int = Query(100, ge=1, le=100),
+    search: Optional[str] = None
 ) -> Any:
-    """Get list of all parishioners with pagination."""
+    """Get list of all parishioners with pagination with an optional search by parishioner id, church ids, or any name"""
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
     
-    # Query parishioners with pagination
-    parishioners = session.query(ParishionerModel)\
-        .offset(skip)\
-        .limit(limit)\
-        .all()
+    # Initialize query
+    query = session.query(ParishionerModel)
     
-    # Get total count
-    total_count = session.query(func.count(ParishionerModel.id)).scalar()
+    # Apply search filter if provided
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                # System ID
+                cast(ParishionerModel.id, String).ilike(search_term),
+                # Church IDs
+                ParishionerModel.old_church_id.ilike(search_term),
+                ParishionerModel.new_church_id.ilike(search_term),
+                # Name fields
+                ParishionerModel.first_name.ilike(search_term),
+                ParishionerModel.last_name.ilike(search_term),
+                ParishionerModel.other_names.ilike(search_term),
+                ParishionerModel.maiden_name.ilike(search_term)
+            )
+        )
+    
+    # Get total count with search filter applied
+    total_count = query.count()
+    
+    # Apply pagination
+    parishioners = query.offset(skip).limit(limit).all()
     
     # Convert to response model
     parishioners_data = [
@@ -129,6 +150,7 @@ async def get_all_parishioners(
             "limit": limit
         }
     )
+
 
 # get detailed parishioner
 @router.get("/{parishioner_id}", response_model=APIResponse)
@@ -455,7 +477,7 @@ router.include_router(
      prefix="/{parishioner_id}/family-info",
 )
 
-# sacrements
+# sacraments
 router.include_router(
     sacraments_router,
     prefix="/{parishioner_id}/sacraments",

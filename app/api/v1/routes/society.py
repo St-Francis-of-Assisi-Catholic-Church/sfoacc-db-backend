@@ -9,7 +9,7 @@ from datetime import datetime
 from app.api.deps import SessionDep, CurrentUser
 from app.models.society import Society, SocietyLeadership, LeadershipRole, MeetingFrequency
 from app.models.parishioner import Parishioner
-from app.schemas.parishioner import APIResponse
+from app.schemas.common import APIResponse
 from app.schemas.society import (
     SocietyCreate, 
     SocietyUpdate, 
