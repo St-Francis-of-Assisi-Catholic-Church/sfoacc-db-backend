@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str
     DOMAIN: str
+    BACKEND_HOST: str
+
+    # SMS & Contact
+    ARKESEL_API_KEY: str 
+    SMS_SENDER_NAME: str
+    CHURCH_NAME: str
+    CHURCH_CONTACT: str
+
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     # Security

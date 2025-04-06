@@ -102,6 +102,7 @@ services:
       - .env
     volumes:
       - ./app:/app/app
+      - ./alembic:/app/alembic
     # environment:
     #   - FRONTEND_HOST=${FRONTEND_HOST?Variable not set}
     #   - ENVIRONMENT=${ENVIRONMENT}

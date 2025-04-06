@@ -1,0 +1,204 @@
+from datetime import datetime
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, Enum, ForeignKey, Table, Text, func, UniqueConstraint
+from sqlalchemy.orm import relationship as db_relationship
+from app.core.database import Base
+
+from app.models.common import Gender, LifeStatus, MaritalStatus, MembershipStatus, VerificationStatus
+from app.models.society import society_members
+
+
+# Association table for skills
+parishioner_skills = Table(
+    'par_parishioner_skills',
+    Base.metadata,
+    Column('parishioner_id', Integer, ForeignKey('parishioners.id')),
+    Column('skill_id', Integer, ForeignKey('par_skills.id')),
+    Column('created_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now()),
+    Column('updated_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=func.now())
+)
+
+# Association table for languages
+parishioner_languages = Table(
+    'par_languages', 
+    Base.metadata,
+    Column('parishioner_id', Integer, ForeignKey('parishioners.id')),
+    Column('language_id', Integer, ForeignKey('languages.id')) ,
+    Column('created_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now()),
+    Column('updated_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=func.now())
+)
+
+
+
+
+
+# Parishioner sacrament records
+class ParishionerSacrament(Base):
+    __tablename__ = "par_sacraments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    parishioner_id = Column(Integer, ForeignKey('parishioners.id'), nullable=False)
+    sacrament_id = Column(Integer, ForeignKey('sacrament.id'), nullable=False)
+    date_received = Column(Date, nullable=True)
+    place = Column(String, nullable=True)
+    minister = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    
+    # Relationships
+    parishioner = db_relationship("Parishioner", back_populates="sacrament_records")
+    sacrament = db_relationship("Sacrament")
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+    
+    # Ensure once_only sacraments can only occur once per parishioner
+    # __table_args__ = (
+    #     UniqueConstraint('parishioner_id', 'sacrament_id', name='uq_parishioner_once_only_sacrament'),
+    # )
+
+class Parishioner(Base):
+    __tablename__ = "parishioners"
+
+    id = Column(Integer, primary_key=True, index=True)
+    old_church_id = Column(String, nullable=True)
+    new_church_id = Column(String, nullable=True)
+
+    # Status fields with defaults
+    membership_status = Column(Enum(MembershipStatus), nullable=False, default=MembershipStatus.ACTIVE, server_default=MembershipStatus.ACTIVE.name)
+    verification_status = Column(Enum(VerificationStatus), nullable=False, default=VerificationStatus.UNVERIFIED, server_default=VerificationStatus.UNVERIFIED.name)
+
+    # Personal Info
+    first_name = Column(String, nullable=False)
+    other_names = Column(String, nullable=True)
+    last_name = Column(String, nullable=False)
+    maiden_name = Column(String, nullable=True)
+    gender = Column(Enum(Gender), nullable=False)
+    date_of_birth = Column(Date, nullable=False)
+    place_of_birth = Column(String, nullable=True)
+    hometown = Column(String, nullable=True)
+    region = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    marital_status = Column(Enum(MaritalStatus), nullable=False, default=MaritalStatus.SINGLE, server_default=MaritalStatus.SINGLE.name)
+    mobile_number = Column(String, nullable=True)
+    whatsapp_number = Column(String, nullable=True)
+    email_address = Column(String, nullable=True)
+    current_residence = Column(String, nullable=True)
+    
+    # Foreign keys for related models
+    church_community_id = Column(Integer, ForeignKey("church_communities.id"), nullable=True)
+    place_of_worship_id = Column(Integer, ForeignKey("places_of_worship.id"), nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+    # Relationships
+    occupation_rel = db_relationship("Occupation", back_populates="parishioner_ref", uselist=False)
+    family_info_rel = db_relationship("FamilyInfo", back_populates="parishioner_ref", uselist=False)
+    emergency_contacts_rel = db_relationship("EmergencyContact", back_populates="parishioner_ref")
+    medical_conditions_rel = db_relationship("MedicalCondition", back_populates="parishioner_ref")
+    skills_rel = db_relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
+    languages_rel = db_relationship("Language", secondary=parishioner_languages, back_populates="parishioners_ref")
+    
+    # Societies relationship
+    societies = db_relationship("Society", secondary=society_members, back_populates="members")
+    
+    # New relationships for the added models
+    church_community = db_relationship("ChurchCommunity", backref="parishioners")
+    place_of_worship = db_relationship("PlaceOfWorship", backref="parishioners")
+    sacrament_records = db_relationship("ParishionerSacrament", back_populates="parishioner")
+
+class Occupation(Base):
+    __tablename__ = "par_occupations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id"), unique=True)
+    role = Column(String, nullable=False)
+    employer = Column(String, nullable=False)
+
+    parishioner_ref = db_relationship("Parishioner", back_populates="occupation_rel")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+class FamilyInfo(Base):
+    __tablename__ = "par_family"
+
+    id = Column(Integer, primary_key=True, index=True)
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id"), unique=True)
+    
+    # Spouse Information
+    spouse_name = Column(String, nullable=True)
+    spouse_status = Column(String, nullable=True)
+    spouse_phone = Column(String, nullable=True)
+    
+    # Parent Information
+    father_name = Column(String, nullable=True)
+    father_status = Column(Enum(LifeStatus), nullable=True)
+    mother_name = Column(String, nullable=True)
+    mother_status = Column(Enum(LifeStatus), nullable=True)
+
+    parishioner_ref = db_relationship("Parishioner", back_populates="family_info_rel")
+    children_rel = db_relationship("Child", back_populates="family_ref")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+class Child(Base):
+    __tablename__ = "par_children"
+
+    id = Column(Integer, primary_key=True, index=True)
+    family_info_id = Column(Integer, ForeignKey("par_family.id"))
+    name = Column(String, nullable=False)
+
+    family_ref = db_relationship("FamilyInfo", back_populates="children_rel")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+class EmergencyContact(Base):
+    __tablename__ = "par_emergency_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
+    name = Column(String, nullable=False)
+    relationship = Column(String, nullable=False)
+    primary_phone = Column(String, nullable=False)
+    alternative_phone = Column(String, nullable=True)
+
+    parishioner_ref = db_relationship("Parishioner", back_populates="emergency_contacts_rel")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+class MedicalCondition(Base):
+    __tablename__ = "par_medical_conditions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
+    condition = Column(String, nullable=False)
+    notes = Column(Text, nullable=True)
+
+    parishioner_ref = db_relationship("Parishioner", back_populates="medical_conditions_rel")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+class Skill(Base):
+    __tablename__ = "par_skills"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False)
+    
+    parishioners_ref = db_relationship("Parishioner", secondary=parishioner_skills, back_populates="skills_rel")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+

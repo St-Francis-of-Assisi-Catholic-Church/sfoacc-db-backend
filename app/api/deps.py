@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import ALGORITHM
 from app.core.database import db
-from app.models.user import User as UserModel
+from app.models.user import User as UserModel, UserStatus
 
 
 
@@ -32,10 +32,43 @@ def get_db() -> Generator[Session, None, None]:
 SessionDep = Annotated[Session, Depends(get_db)]
 TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
+
+def check_user_status(user: UserModel) -> None:
+    """
+    Centralized user status checking logic to ensure consistent error handling
+    Raises appropriate HTTPException based on user status
+    """
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if user.status == UserStatus.DISABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been disabled. Please contact support for assistance."
+        )
+    elif user.status == UserStatus.RESET_REQUIRED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password reset required. Please reset your password before continuing."
+        )
+    elif user.status != UserStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is not active. Please verify your account or contact support."
+        )
+
+
 def get_current_user(
     session: SessionDep,
     token: TokenDep,
 ) -> UserModel:
+    """
+    Validate the access token and return the current active user.
+    Handles all token validation and user status checks.
+    """
     try:
         payload = api_jwt.decode(
             token,
@@ -50,18 +83,18 @@ def get_current_user(
             detail="Could not validate credentials",
         )
     
+    # new checks
+    if token_data.sub is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid token payload"
+        )
+    
     user = session.query(UserModel).filter(UserModel.id == token_data.sub).first()
     
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
-        )
+    # Centralized status checking
+    check_user_status(user)
+
     return user
 
 # Current user dependency
@@ -70,9 +103,12 @@ CurrentUser = Annotated[UserModel, Depends(get_current_user)]
 def get_current_active_superuser(
     current_user: CurrentUser,
 ) -> UserModel:
+    """
+    Verify the current user has superadmin privileges
+    """
     if not current_user.role == "super_admin":
-        raise HTTPException(
+         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="The user doesn't have enough privileges"
+            detail="Insufficient privileges. This action requires super admin access."
         )
     return current_user

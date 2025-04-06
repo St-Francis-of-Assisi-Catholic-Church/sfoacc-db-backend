@@ -8,6 +8,11 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
     USER = "user"
 
+class UserStatus(str, enum.Enum):
+    ACTIVE = "active"
+    DISABLED = "disabled"
+    RESET_REQUIRED = "reset_required"
+
 class User(Base):
     __tablename__ = "users"
 
@@ -15,8 +20,12 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER)
-    is_active = Column(Boolean, default=False)
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER.value)
+    status = Column(
+        Enum(UserStatus),
+        nullable=False,
+        default=UserStatus.RESET_REQUIRED.value,  # New users need to reset their password
+    )
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

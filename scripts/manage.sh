@@ -34,6 +34,22 @@ show_service_info() {
 }
 
 
+# Function to initiliaze db
+init_db() {
+    echo -e "${GREEN}Initializing database...${NC}"
+    docker compose exec api python3 -m app.scripts.init_db
+}
+
+seed_church_data() {
+    echo -e "${GREEN}Seeding church data table...${NC}"
+    docker compose exec api python3 -m app.scripts.seed_sacraments
+    docker compose exec api python3 -m app.scripts.seed_church_communities
+    docker compose exec api python3 -m app.scripts.seed_place_of_worship
+    docker compose exec api python3 -m app.scripts.seed_church_societies
+    docker compose exec api python3 -m app.scripts.seed_languages
+    # add rest of date scripts here
+}
+
 # Function to create superuser
 create_superuser() {
     echo -e "${GREEN}Creating superuser...${NC}"
@@ -88,6 +104,12 @@ access_shell() {
     docker compose exec api python3
 }
 
+# function to access container's bash shell
+access_bash() {
+    echo -e "${GREEN}Opening bash shell in api container...${NC}"
+    docker compose exec api /bin/bash
+}
+
 # Function to generate SSL certificates
 generate_ssl() {
     echo -e "${GREEN}Generating SSL certificates...${NC}"
@@ -111,26 +133,38 @@ setup_project() {
 
     # create superuser
     create_superuser
+
+    # see data
+    seed_church_data
 }
 
 # Function to show help
 show_help() {
-    echo -e "${GREEN}Available commands:${NC}"
+    echo -e "  ${GREEN}Available commands:${NC}"
     echo -e "  ${YELLOW}setup${NC}           - Initial project setup (directories, SSL, build)"
+    echo -e "  ${YELLOW}seed${NC}             - Seed church data"
     echo -e "  ${YELLOW}ssl${NC}             - Generate SSL certificates"
+    echo -e "  ${YELLOW}initdb${NC}             - Initiative db"
     echo -e "  ${YELLOW}createsuperuser${NC}  - Create a superuser account"
     echo -e "  ${YELLOW}checkdb${NC}         - Check database connection"
     echo -e "  ${YELLOW}runserver${NC}       - Run Docker containers (attached mode)"
     echo -e "  ${YELLOW}start${NC}           - Start services in detached mode"
     echo -e "  ${YELLOW}build${NC}           - Build Docker containers"
     echo -e "  ${YELLOW}shell${NC}           - Open Python shell in api container"
+    echo -e "  ${YELLOW}bash${NC}            - Open Container's bash shell in api"
     echo -e "  ${YELLOW}help${NC}            - Show this help message"
 }
 
 # Main script
 case "$1" in
+    "initdb")
+        init_db
+        ;;
     "setup")
         setup_project
+        ;;
+    "seed")
+        seed_church_data
         ;;
     "ssl")
         generate_ssl
@@ -152,6 +186,9 @@ case "$1" in
         ;;
     "shell")
         access_shell
+        ;;
+    "bash")
+        access_bash
         ;;
     "help"|"")
         show_help
