@@ -18,9 +18,9 @@ def seed_sacraments():
             "once_only": True
         },
         {
-            "name": "Holy Communion",
+            "name": "First Communion",
             "description": "Also known as First Holy Communion or Eucharist, this sacrament commemorates the Last Supper, where Catholics receive the Body and Blood of Christ in the form of bread and wine.",
-            "once_only": False
+            "once_only": True
         },
         {
             "name": "Confirmation",
@@ -28,8 +28,8 @@ def seed_sacraments():
             "once_only": True
         },
         {
-            "name": "Reconciliation",
-            "description": "Also called Confession or Penance, this sacrament allows Catholics to confess their sins, receive absolution from a priest, and be reconciled with God.",
+            "name": "Penance",
+            "description": "Also called Confession or Reconciliation, this sacrament allows Catholics to confess their sins, receive absolution from a priest, and be reconciled with God.",
             "once_only": False
         },
         {

@@ -75,7 +75,6 @@ def get_society_members(
         return []
     
     # Find the association table name from the relationship metadata
-    # This approach is more robust than directly accessing property.secondary
     association_table = Society.members.prop.secondary
     
     query = session.query(
@@ -86,7 +85,7 @@ def get_society_members(
         Parishioner.mobile_number,
         Parishioner.email_address,
         Parishioner.gender,
-        association_table.c.status.label('membership_status'),
+        association_table.c.membership_status.label('membership_status'),  # Changed from status to membership_status
         association_table.c.join_date.label('join_date')
     ).join(
         association_table,
@@ -109,6 +108,13 @@ def get_society_members(
         # Extract all fields from the query result
         id, first_name, last_name, church_id, mobile, email, gender, membership_status, join_date = row
         
+        # Convert membership_status enum to string if it's an enum object
+        status_value = membership_status
+        if hasattr(membership_status, 'value'):  # Check if it's an enum
+            status_value = membership_status.value
+        elif hasattr(membership_status, 'name'):  # Some enums use name instead of value
+            status_value = membership_status.name
+            
         result.append({
             "id": id,
             "name": f"{first_name} {last_name}",
@@ -116,11 +122,12 @@ def get_society_members(
             "mobile": mobile,
             "email": email, 
             "gender": gender,
-            "membership_status": membership_status or "active",  # Default to active if null
+            "membership_status": status_value or "active",  # Default to active if null
             "join_date": join_date
         })
     
     return result
+
 
 # Convert Society model to dict for Pydantic schemas
 def society_to_dict(society, session=None, include_leadership=True, include_members=False, member_limit=10):
@@ -803,14 +810,19 @@ async def add_members_to_society(
                 existing += 1
                 continue
             
-            # Add to society with status and join_date
+            # Add to society with membership_status and join_date
             now = datetime.now()
             
-            # Use direct SQL insert for the association table to include status and join_date
+            # Use direct SQL insert for the association table to include membership_status and join_date
+            # Get the MembershipStatus enum for ACTIVE
+            from app.models.common import MembershipStatus
+            active_status = MembershipStatus.ACTIVE
+            
+            # Insert with correct column names
             stmt = association_table.insert().values(
                 society_id=society_id,
                 parishioner_id=p_id,
-                status="active",
+                membership_status=active_status,  # Changed from status to membership_status
                 join_date=now
             )
             session.execute(stmt)
@@ -821,7 +833,7 @@ async def add_members_to_society(
         return APIResponse(
             message="Members added to society",
             data={
-                "success": True,
+                "success": True if not_found == 0 else False,
                 "added": added,
                 "existing": existing,
                 "not_found": not_found
@@ -837,7 +849,6 @@ async def add_members_to_society(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
 
 @router.delete("/{society_id}/members", response_model=APIResponse)
 async def remove_members_from_society(
@@ -922,7 +933,7 @@ async def get_members_of_society(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     search: Optional[str] = None,
-    status: Optional[str] = Query(None, description="Filter by membership status (active, inactive, suspended, pending)")
+    membership_status: Optional[str] = Query(None, description="Filter by membership status (active, inactive, suspended, pending)")
 ) -> Any:
     """
     Get members of a society with pagination and optional search and status filtering.
@@ -948,18 +959,18 @@ async def get_members_of_society(
         count_query = session.query(func.count(association_table.c.parishioner_id))\
             .filter(association_table.c.society_id == society_id)
             
-        # Apply status filter to count if provided
-        if status:
-            count_query = count_query.filter(association_table.c.status == status)
+        # Apply membership_status filter to count if provided
+        if membership_status:
+            count_query = count_query.filter(association_table.c.status == membership_status)
             
         total_count = count_query.scalar() or 0
         
         # Get members with optional filters
         members = get_society_members(session, society_id, skip, limit, search)
         
-        # Filter by status if provided
-        if status:
-            members = [m for m in members if m["membership_status"] == status]
+        # Filter by membership_status if provided
+        if membership_status:
+            members = [m for m in members if m["membership_status"] == membership_status]
         
         return APIResponse(
             message=f"Retrieved {len(members)} society members",
@@ -1030,12 +1041,22 @@ async def update_member_status(
                 detail="Parishioner is not a member of this society"
             )
         
-        # Update the status
+        # Get the appropriate MembershipStatus enum value
+        from app.models.common import MembershipStatus
+        try:
+            new_status = MembershipStatus(status_update.status)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status value: {status_update.status}. Valid values are: {', '.join([s.value for s in MembershipStatus])}"
+            )
+        
+        # Update the membership_status
         stmt = association_table.update().where(
             association_table.c.society_id == society_id,
             association_table.c.parishioner_id == parishioner_id
         ).values(
-            status=status_update.status
+            membership_status=new_status  # Changed from status to membership_status
         )
         
         session.execute(stmt)
@@ -1060,14 +1081,16 @@ async def update_member_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+    
 
-@router.get("/{society_id}/members/status/{status}", response_model=APIResponse)
+    
+@router.get("/{society_id}/members/status/{membership_status}", response_model=APIResponse)
 async def get_members_by_status(
     *,
     session: SessionDep,
     current_user: CurrentUser,
     society_id: int,
-    status: Literal["active", "inactive", "suspended", "pending"],
+    membership_status: str,  # Accept as string, will convert to enum
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100)
 ) -> Any:
@@ -1091,6 +1114,18 @@ async def get_members_by_status(
         # Get the association table
         association_table = Society.members.prop.secondary
         
+        # Convert the status string to enum value
+        from app.models.common import MembershipStatus
+        try:
+            status_enum = MembershipStatus(membership_status)
+        except ValueError:
+            # If it's not a valid enum value, raise an error
+            valid_statuses = [s.value for s in MembershipStatus]
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status: {membership_status}. Valid values are: {', '.join(valid_statuses)}"
+            )
+        
         # Query members with the specified status
         query = session.query(
             Parishioner.id,
@@ -1100,14 +1135,14 @@ async def get_members_by_status(
             Parishioner.mobile_number,
             Parishioner.email_address,
             Parishioner.gender,
-            association_table.c.status.label('membership_status'),
+            association_table.c.membership_status.label('membership_status'),  # Changed from status to membership_status
             association_table.c.join_date.label('join_date')
         ).join(
             association_table,
             Parishioner.id == association_table.c.parishioner_id
         ).filter(
             association_table.c.society_id == society_id,
-            association_table.c.status == status
+            association_table.c.membership_status == status_enum  # Changed from status to membership_status
         )
         
         # Count total matching records
@@ -1119,7 +1154,14 @@ async def get_members_by_status(
         result = []
         for row in members:
             # Extract all fields from the query result
-            id, first_name, last_name, church_id, mobile, email, gender, membership_status, join_date = row
+            id, first_name, last_name, church_id, mobile, email, gender, member_status, join_date = row
+            
+            # Convert status enum to string if needed
+            status_value = member_status
+            if hasattr(member_status, 'value'):
+                status_value = member_status.value
+            elif hasattr(member_status, 'name'):
+                status_value = member_status.name
             
             result.append({
                 "id": id,
@@ -1128,18 +1170,18 @@ async def get_members_by_status(
                 "mobile": mobile,
                 "email": email, 
                 "gender": gender,
-                "membership_status": membership_status,
+                "membership_status": status_value,
                 "join_date": join_date
             })
         
         return APIResponse(
-            message=f"Retrieved {len(result)} society members with status '{status}'",
+            message=f"Retrieved {len(result)} society members with status '{membership_status}'",
             data={
                 "total": total_count,
                 "items": result,
                 "skip": skip,
                 "limit": limit,
-                "status": status
+                "status": membership_status
             }
         )
     
@@ -1151,3 +1193,4 @@ async def get_members_by_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+

@@ -9,3 +9,21 @@
   "country": "Ghana",
   "marital_status": "single",
 }
+
+
+{
+  "first_name": "Jon",
+  "other_names": "Mensah",
+  "last_name": "Dexter",
+  "gender": "male",
+  "date_of_birth": "2000-04-05",
+  "place_of_birth": "Accra",
+  "hometown": "Accra",
+  "region": "Accra",
+  "country": "Ghana",
+  "marital_status": "single",
+  "mobile_number": "0543460633",
+  "whatsapp_number": "0543460633",
+  "email_address": "jondexter20@gmail.com",
+  "current_residence": "Ashaley Botwe"
+}

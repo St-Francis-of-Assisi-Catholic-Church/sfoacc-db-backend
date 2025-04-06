@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, CurrentUser
-from app.models.parishioner import Parishioner, FamilyInfo, Child, ParentalStatus
+from app.models.parishioner import Parishioner, FamilyInfo, Child, LifeStatus
 from app.schemas.common import APIResponse
 from app.schemas.parishioner import (
     FamilyInfoBatch, FamilyInfoRead, FamilyInfoUpdate, ChildCreate,
@@ -222,9 +222,9 @@ async def batch_update_family_info(
                 spouse_status = spouse_data.get('status')
                 if spouse_status:
                     try:
-                        new_family_info.spouse_status = ParentalStatus(spouse_status.lower())
+                        new_family_info.spouse_status = LifeStatus(spouse_status.lower())
                     except (ValueError, AttributeError):
-                        new_family_info.spouse_status = ParentalStatus.UNKNOWN
+                        new_family_info.spouse_status = LifeStatus.UNKNOWN
                 
                 new_family_info.spouse_phone = spouse_data.get('phone')
             else:
@@ -243,9 +243,9 @@ async def batch_update_family_info(
                 father_status = father_data.get('status')
                 if father_status:
                     try:
-                        new_family_info.father_status = ParentalStatus(father_status.lower())
+                        new_family_info.father_status = LifeStatus(father_status.lower())
                     except (ValueError, AttributeError):
-                        new_family_info.father_status = ParentalStatus.UNKNOWN
+                        new_family_info.father_status = LifeStatus.UNKNOWN
             else:
                 # If father is null/None, explicitly set father fields to None
                 new_family_info.father_name = None
@@ -261,9 +261,9 @@ async def batch_update_family_info(
                 mother_status = mother_data.get('status')
                 if mother_status:
                     try:
-                        new_family_info.mother_status = ParentalStatus(mother_status.lower())
+                        new_family_info.mother_status = LifeStatus(mother_status.lower())
                     except (ValueError, AttributeError):
-                        new_family_info.mother_status = ParentalStatus.UNKNOWN
+                        new_family_info.mother_status = LifeStatus.UNKNOWN
             else:
                 # If mother is null/None, explicitly set mother fields to None
                 new_family_info.mother_name = None

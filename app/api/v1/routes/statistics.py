@@ -8,7 +8,8 @@ from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import (
     Parishioner as ParishionerModel,
     Occupation, FamilyInfo,
-    EmergencyContact, MedicalCondition, ParSacrament,
+    EmergencyContact, MedicalCondition,
+    ParishionerSacrament,
     Skill, Child
 )
 from app.models.society import Society, society_members
@@ -35,7 +36,11 @@ async def get_parishioner_stats(
         # 2. Total societies
         total_societies = session.query(func.count(Society.id)).scalar()
         
-        # 3. Count parishioners by societies
+        # 3. Total places of worship
+        from app.models.place_of_worship import PlaceOfWorship
+        total_places_of_worship = session.query(func.count(PlaceOfWorship.id)).scalar()
+        
+        # 4. Society distribution (count of members in each society)
         society_stats = (
             session.query(
                 Society.name,
@@ -46,24 +51,16 @@ async def get_parishioner_stats(
             .all()
         )
         
-        # Count parishioners without any society
-        # First, get IDs of parishioners who belong to at least one society
-        parishioners_in_societies = (
-            session.query(society_members.c.parishioner_id)
-            .distinct()
-            .subquery()
-        )
-        
-        # Then count parishioners not in that subquery
-        parishioners_without_society = (
-            session.query(func.count(ParishionerModel.id))
-            .filter(~ParishionerModel.id.in_(
-                session.query(parishioners_in_societies.c.parishioner_id)
-            ))
+        # 5. Parishioners in societies
+        parishioners_in_societies_count = (
+            session.query(func.count(distinct(society_members.c.parishioner_id)))
             .scalar()
         )
         
-        # 4. Count of parishioners by day of week born
+        # 6. Parishioners without any society
+        parishioners_without_society = total_parishioners - parishioners_in_societies_count
+        
+        # 7. Day of week born distribution (all days with counts, 0 if none)
         day_of_week_stats = (
             session.query(
                 func.extract('dow', ParishionerModel.date_of_birth),
@@ -73,14 +70,48 @@ async def get_parishioner_stats(
             .all()
         )
         
-        # Convert day of week numbers to names
+        # Convert day of week numbers to names and ensure all days are included
         days_of_week = {
             0: "Sunday", 1: "Monday", 2: "Tuesday", 3: "Wednesday",
             4: "Thursday", 5: "Friday", 6: "Saturday"
         }
-        day_of_week_distribution = {days_of_week[int(day)]: count for day, count in day_of_week_stats}
         
-        # 5. Count of parishioners by gender
+        # Initialize with 0 counts for all days
+        day_of_week_distribution = {day_name: 0 for day_name in days_of_week.values()}
+        
+        # Update with actual counts
+        for day, count in day_of_week_stats:
+            if day is not None:
+                day_of_week_distribution[days_of_week[int(day)]] = count
+        
+        # 8. Sacraments distribution per parishioner
+        from app.models.sacrament import Sacrament
+        
+        # Get all sacraments first to ensure we include those with zero counts
+        all_sacraments = session.query(Sacrament.name).all()
+        sacrament_names = [sacrament[0] for sacrament in all_sacraments]
+        
+        # Initialize counts with zeros
+        sacrament_distribution = {name: 0 for name in sacrament_names}
+        
+        # Update with actual counts from ParishionerSacrament
+        sacrament_stats = (
+            session.query(
+                Sacrament.name,
+                func.count(distinct(ParishionerSacrament.parishioner_id))
+            )
+            .join(ParishionerSacrament, Sacrament.id == ParishionerSacrament.sacrament_id)
+            .group_by(Sacrament.name)
+            .all()
+        )
+        
+        for sacrament_name, count in sacrament_stats:
+            if sacrament_name is not None:
+                sacrament_distribution[sacrament_name] = count
+        
+        # 9. Additional useful statistics
+        
+        # Gender distribution
         gender_stats = (
             session.query(
                 ParishionerModel.gender,
@@ -90,35 +121,54 @@ async def get_parishioner_stats(
             .all()
         )
         
-        # 6. Count of parishioners by place of worship
-        worship_place_stats = (
-            session.query(
-                ParishionerModel.place_of_worship,
-                func.count(ParishionerModel.id)
-            )
-            .group_by(ParishionerModel.place_of_worship)
-            .all()
-        )
+        gender_distribution = {g[0].value if g[0] else "Not specified": g[1] for g in gender_stats}
         
-        # 7. Count of parishioners by sacraments
-        sacrament_stats = (
-            session.query(
-                ParSacrament.type,
-                func.count(distinct(ParSacrament.parishioner_id))
-            )
-            .group_by(ParSacrament.type)
-            .all()
-        )
+        # Age group distribution
+        current_year = datetime.utcnow().year
+        age_groups = {
+            "0-17": 0,
+            "18-25": 0,
+            "26-40": 0,
+            "41-60": 0,
+            "61+": 0,
+            "Unknown": 0
+        }
+        
+        for year_born, count in session.query(
+            func.extract('year', ParishionerModel.date_of_birth),
+            func.count(ParishionerModel.id)
+        ).group_by(func.extract('year', ParishionerModel.date_of_birth)).all():
+            if year_born is None:
+                age_groups["Unknown"] += count
+            else:
+                age = current_year - int(year_born)
+                if age <= 17:
+                    age_groups["0-17"] += count
+                elif age <= 25:
+                    age_groups["18-25"] += count
+                elif age <= 40:
+                    age_groups["26-40"] += count
+                elif age <= 60:
+                    age_groups["41-60"] += count
+                else:
+                    age_groups["61+"] += count
+        
+        # Total church communities
+        from app.models.church_community import ChurchCommunity
+        total_communities = session.query(func.count(ChurchCommunity.id)).scalar()
 
         stats = {
             "total_parishioners": total_parishioners,
             "total_societies": total_societies,
+            "total_places_of_worship": total_places_of_worship,
+            "total_church_communities": total_communities,
             "society_distribution": {s[0]: s[1] for s in society_stats},
+            "parishioners_in_societies": parishioners_in_societies_count,
             "parishioners_without_society": parishioners_without_society,
             "day_of_week_born_distribution": day_of_week_distribution,
-            "gender_distribution": {g[0].value: g[1] for g in gender_stats},
-            "place_of_worship_distribution": {w[0] or "Not specified": w[1] for w in worship_place_stats},
-            "sacraments_distribution": {s[0].value: s[1] for s in sacrament_stats}
+            "sacraments_distribution": sacrament_distribution,
+            "gender_distribution": gender_distribution,
+            "age_group_distribution": age_groups
         }
 
         return APIResponse(
@@ -133,10 +183,7 @@ async def get_parishioner_stats(
             detail=f"Error retrieving parishioner statistics: {str(e)}"
         )
     
-
-
-
-
+    
 @router.get("/registration", response_model=APIResponse)
 async def get_registration_stats(
     session: SessionDep,

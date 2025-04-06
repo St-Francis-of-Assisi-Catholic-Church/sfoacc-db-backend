@@ -1,6 +1,16 @@
 from datetime import datetime
+import enum
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, func
 from app.core.database import Base
+
+class SacramentType(str, enum.Enum):
+    BAPTISM = "Baptism"
+    FIRST_COMMUNION = "First Communion"
+    CONFIRMATION = "Confirmation"
+    PENANCE = "Penance"
+    ANOINTING = "Anointing of the Sick"
+    HOLY_ORDERS = "Holy Orders"
+    MATRIMONY = "Holy Matrimony"
 
 
 class Sacrament(Base):

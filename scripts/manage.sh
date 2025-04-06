@@ -45,6 +45,8 @@ seed_church_data() {
     docker compose exec api python3 -m app.scripts.seed_sacraments
     docker compose exec api python3 -m app.scripts.seed_church_communities
     docker compose exec api python3 -m app.scripts.seed_place_of_worship
+    docker compose exec api python3 -m app.scripts.seed_church_societies
+    docker compose exec api python3 -m app.scripts.seed_languages
     # add rest of date scripts here
 }
 
@@ -131,6 +133,9 @@ setup_project() {
 
     # create superuser
     create_superuser
+
+    # see data
+    seed_church_data
 }
 
 # Function to show help

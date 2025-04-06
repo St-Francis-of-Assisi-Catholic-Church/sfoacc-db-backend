@@ -53,18 +53,11 @@ def seed_church_communities():
     
     with db.session() as session:
         try:
-            # Truncate the table before seeding
-            logger.info("Truncating church_communities table...")
-            
-            # Disable foreign key constraints temporarily if needed
-            session.execute(text("SET CONSTRAINTS ALL DEFERRED"))
-            
-            # Delete all existing records
-            session.query(ChurchCommunity).delete()
-            
-            session.commit()
-            logger.info("Church communities table truncated successfully")
-            
+            existing_count = session.query(ChurchCommunity).count()
+        
+            if existing_count > 0:
+                logger.info(f"Church communities table already has {existing_count} records. Skipping seed.")
+                return
             # Seed the data
             logger.info("Seeding church communities table...")
             

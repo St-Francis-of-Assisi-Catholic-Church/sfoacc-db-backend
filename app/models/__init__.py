@@ -5,7 +5,8 @@ from app.models.society import Society
 from app.models.sacrament import Sacrament
 from app.models.place_of_worship import PlaceOfWorship
 from app.models.church_community import ChurchCommunity
+from app.models.language import Language
 # Import other models here
 
 # This makes it easy to import all models at once
-__all__ = ['User', 'Parishioner', 'VerificationRecord', "Society", "Sacrament", "PlaceOfWorship", "ChurchCommunity"]  # Add other models here
+__all__ = ['User', 'Parishioner', 'VerificationRecord', "Society", "Sacrament", "PlaceOfWorship", "ChurchCommunity", "Language"]  # Add other models here

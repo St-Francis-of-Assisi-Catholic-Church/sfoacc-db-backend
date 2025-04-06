@@ -46,6 +46,10 @@ class SMSService:
             "id_generation_confirmation": SMSTemplate(
                 name="id_generation_confirmation",
                 content="Hi {parishioner_name}, your new church ID : {new_church_id} has been generated successfully. Please keep this information for your records. Thank you!"
+            ),
+             "record_verification_confirmation_sms": SMSTemplate(
+                name="record_verification_confirmation_sms",
+                content="Hi {parishioner_name}, thank you for verifying your church records. Your information has been successfully confirmed in our system. Thank you!"
             )
         }
     
@@ -178,6 +182,12 @@ class SMSService:
             "church_contact": settings.CHURCH_CONTACT
         }
         return self.send_from_template("id_generation_confirmation", [phone], context)
+    
+    def send_record_verification_confirmation_sms(self, parishioner_name: str, phone: str,) -> Dict[str, Any]:
+        context = {
+            "parishioner_name": parishioner_name,
+        }
+        return self.send_from_template("record_verification_confirmation_sms",[phone], context)
          
 
 # Create a singleton instance
