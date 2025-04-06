@@ -1,27 +1,29 @@
 import logging
 from typing import Any, List
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Query
-from sqlalchemy import func
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, CurrentUser
+from app.models.church_community import ChurchCommunity
 from app.models.parishioner import (
     Parishioner as ParishionerModel,
-     Occupation, FamilyInfo,
-    EmergencyContact, MedicalCondition, Sacrament,
-    Skill, Child
+    FamilyInfo
 )
+from app.models.place_of_worship import PlaceOfWorship
+from app.schemas.common import APIResponse
 from app.schemas.parishioner import *
 
 from app.api.v1.routes.parishioner_routes.occupation import occupation_router
 from app.api.v1.routes.parishioner_routes.emergency_contacts import emergency_contacts_router
 from app.api.v1.routes.parishioner_routes.medical_conditions import medical_conditions_router
 from app.api.v1.routes.parishioner_routes.family_info import family_info_router
-from app.api.v1.routes.parishioner_routes.sacrements import sacraments_router
+from app.api.v1.routes.parishioner_routes.sacraments import sacraments_router
 from app.api.v1.routes.parishioner_routes.skills import skills_router
 from app.api.v1.routes.parishioner_routes.file_upload import file_upload_router
 from app.api.v1.routes.parishioner_routes.verification_msg import verify_router
+from app.api.v1.routes.parishioner_routes.languages import languages_router
 
 from app.services.sms.service import sms_service
 from app.services.email.service import email_service
@@ -93,26 +95,46 @@ async def create_parishioner(
 # Get all parishioners
 @router.get("/all", response_model=APIResponse)
 async def get_all_parishioners(
+    *,
     session: SessionDep,
     current_user: CurrentUser,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100)
+    limit: int = Query(100, ge=1, le=100),
+    search: Optional[str] = None
 ) -> Any:
-    """Get list of all parishioners with pagination."""
+    """Get list of all parishioners with pagination with an optional search by parishioner id, church ids, or any name"""
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
     
-    # Query parishioners with pagination
-    parishioners = session.query(ParishionerModel)\
-        .offset(skip)\
-        .limit(limit)\
-        .all()
+    # Initialize query
+    query = session.query(ParishionerModel)
     
-    # Get total count
-    total_count = session.query(func.count(ParishionerModel.id)).scalar()
+    # Apply search filter if provided
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                # System ID
+                cast(ParishionerModel.id, String).ilike(search_term),
+                # Church IDs
+                ParishionerModel.old_church_id.ilike(search_term),
+                ParishionerModel.new_church_id.ilike(search_term),
+                # Name fields
+                ParishionerModel.first_name.ilike(search_term),
+                ParishionerModel.last_name.ilike(search_term),
+                ParishionerModel.other_names.ilike(search_term),
+                ParishionerModel.maiden_name.ilike(search_term)
+            )
+        )
+    
+    # Get total count with search filter applied
+    total_count = query.count()
+    
+    # Apply pagination
+    parishioners = query.offset(skip).limit(limit).all()
     
     # Convert to response model
     parishioners_data = [
@@ -129,6 +151,7 @@ async def get_all_parishioners(
             "limit": limit
         }
     )
+
 
 # get detailed parishioner
 @router.get("/{parishioner_id}", response_model=APIResponse)
@@ -151,8 +174,9 @@ async def get_detailed_parishioner(
         joinedload(ParishionerModel.family_info_rel).joinedload(FamilyInfo.children_rel),
         joinedload(ParishionerModel.emergency_contacts_rel),
         joinedload(ParishionerModel.medical_conditions_rel),
-        joinedload(ParishionerModel.sacraments_rel),
-        joinedload(ParishionerModel.skills_rel)
+        joinedload(ParishionerModel.sacrament_records),
+        joinedload(ParishionerModel.skills_rel),
+        joinedload(ParishionerModel.societies)  
     ).filter(
         ParishionerModel.id == parishioner_id
     ).first()
@@ -189,6 +213,47 @@ async def get_detailed_parishioner(
             "created_at": parishioner.family_info_rel.created_at,
             "updated_at": parishioner.family_info_rel.updated_at
         }
+
+    # Format societies data to include relevant fields
+    societies_data = []
+    if parishioner.societies:
+        # Import the association table to query membership details
+        from app.models.society import society_members
+        
+        for society in parishioner.societies:
+            # Query the association table for membership details
+            membership_details = session.query(society_members).filter(
+                society_members.c.parishioner_id == parishioner_id,
+                society_members.c.society_id == society.id
+            ).first()
+            
+            # Get date_joined and membership_status from the association table
+            date_joined = None
+            membership_status = None
+            if membership_details:
+                # Use column names from your society_members table
+                # Adjust these field names to match your actual column names
+                date_joined = membership_details.date_joined if hasattr(membership_details, 'date_joined') else None
+                membership_status = membership_details.membership_status if hasattr(membership_details, 'membership_status') else None
+            
+            societies_data.append({
+                "id": society.id,
+                "name": society.name,
+                "description": society.description,
+                "date_joined": date_joined,
+                "membership_status": membership_status, 
+                "created_at": society.created_at,
+                "updated_at": society.updated_at,
+            })
+
+    languages_data = []
+    if parishioner.languages_rel:
+        for language in parishioner.languages_rel:
+            languages_data.append({
+                "id": language.id,
+                "name": language.name,
+                "description": language.description
+            })
     
     parishioner_dict = {
         # Basic fields from ParishionerRead
@@ -209,6 +274,7 @@ async def get_detailed_parishioner(
         "mobile_number": parishioner.mobile_number,
         "whatsapp_number": parishioner.whatsapp_number,
         "email_address": parishioner.email_address,
+        "current_residence": parishioner.current_residence,
         "membership_status": parishioner.membership_status,
         "verification_status": parishioner.verification_status,
         "created_at": parishioner.created_at,
@@ -219,8 +285,13 @@ async def get_detailed_parishioner(
         "family_info": family_info,
         "emergency_contacts": parishioner.emergency_contacts_rel,
         "medical_conditions": parishioner.medical_conditions_rel,
-        "sacraments": parishioner.sacraments_rel,
-        "skills": parishioner.skills_rel
+        "sacraments": parishioner.sacrament_records,
+        "skills": parishioner.skills_rel,
+        "place_of_worship": parishioner.place_of_worship,
+        "church_community": parishioner.church_community,
+        "societies": societies_data,
+        "languages_spoken": languages_data
+
     }
 
     return APIResponse(
@@ -228,7 +299,7 @@ async def get_detailed_parishioner(
         data=ParishionerDetailedRead.model_validate(parishioner_dict)  # Pydantic will automatically handle the conversion
     )
 
-# Update parishioner
+
 @router.put("/{parishioner_id}", response_model=APIResponse)
 async def update_parishioner(
     *,
@@ -256,7 +327,7 @@ async def update_parishioner(
         )
     
     try:
-       # Only update fields that were actually provided
+        # Only update fields that were actually provided
         update_data = parishioner_in.model_dump(exclude_unset=True, exclude_none=True)
         
         if not update_data:
@@ -264,7 +335,54 @@ async def update_parishioner(
                 message="No fields to update",
                 data=ParishionerRead.model_validate(parishioner)
             )
-            
+        
+        # Handle place_of_worship_id validation
+        if 'place_of_worship_id' in update_data:
+            try:
+                # Convert to integer if it's a string
+                if isinstance(update_data['place_of_worship_id'], str):
+                    update_data['place_of_worship_id'] = int(update_data['place_of_worship_id'])
+                
+                # Validate the ID exists
+                place_of_worship = session.query(PlaceOfWorship).filter(
+                    PlaceOfWorship.id == update_data['place_of_worship_id']
+                ).first()
+                
+                if not place_of_worship:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Place of worship with ID {update_data['place_of_worship_id']} not found"
+                    )
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid place_of_worship_id format. Must be a valid integer."
+                )
+                
+        # Handle church_community_id validation
+        if 'church_community_id' in update_data:
+            try:
+                # Convert to integer if it's a string
+                if isinstance(update_data['church_community_id'], str):
+                    update_data['church_community_id'] = int(update_data['church_community_id'])
+                
+                # Validate the ID exists
+                church_community = session.query(ChurchCommunity).filter(
+                    ChurchCommunity.id == update_data['church_community_id']
+                ).first()
+                
+                if not church_community:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Church community with ID {update_data['church_community_id']} not found"
+                    )
+            except (ValueError, TypeError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid church_community_id format. Must be a valid integer."
+                )
+        
+        # Update all fields
         for field, value in update_data.items():
             setattr(parishioner, field, value)
 
@@ -283,6 +401,10 @@ async def update_parishioner(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Database integrity error. Possible duplicate entry."
         )
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
         logger.error(f"Error updating parishioner: {str(e)}")
@@ -290,8 +412,9 @@ async def update_parishioner(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+    
 
-
+    
 # generate churchID
 @router.post("/{parishioner_id}/generate-church-id", response_model=APIResponse)
 async def generate_church_id(
@@ -455,7 +578,7 @@ router.include_router(
      prefix="/{parishioner_id}/family-info",
 )
 
-# sacrements
+# sacraments
 router.include_router(
     sacraments_router,
     prefix="/{parishioner_id}/sacraments",
@@ -465,6 +588,12 @@ router.include_router(
 router.include_router(
     skills_router,
     prefix="/{parishioner_id}/skills",
+)
+
+# languages
+router.include_router(
+languages_router,
+prefix="/{parishioner_id}/languages",
 )
 
 # file upload

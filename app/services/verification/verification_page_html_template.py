@@ -124,6 +124,38 @@ verification_page_template = """
             border-left: 4px solid #ffd700;
             color: #856404;
         }
+        .confirmation-section {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .confirm-button {
+            background-color: #28a745;
+            color: white;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 5px;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .confirm-button:hover {
+            background-color: #218838;
+        }
+        .confirm-button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .confirmation-message {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
         @media (max-width: 600px) {
             .container {
                 padding: 15px;
@@ -178,6 +210,12 @@ verification_page_template = """
                     {{CHURCH_INFO}}
                 </div>
                 
+                <!-- Societies Section -->
+                <div class="section">
+                    <h2>Societies</h2>
+                    {{SOCIETIES_INFO}}
+                </div>
+                
                 <!-- Sacraments Section -->
                 <div class="section">
                     <h2>Sacraments</h2>
@@ -189,6 +227,9 @@ verification_page_template = """
                     <h2>Additional Information</h2>
                     {{ADDITIONAL_INFO}}
                 </div>
+                
+                <!-- Confirmation Button -->
+                {{CONFIRMATION_BUTTON}}
                 
                 <div class="update-notice">
                     <p><strong>Need to update your information?</strong> If any of the details above are incorrect or have changed, 

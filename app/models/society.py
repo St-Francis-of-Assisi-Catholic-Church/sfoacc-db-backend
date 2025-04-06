@@ -3,6 +3,7 @@ import enum
 from sqlalchemy import Column, ForeignKey, Integer, Date, DateTime, String, Table, Text, Time, func, Enum
 from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
+from app.models.common import MembershipStatus
 
 
 # Association table for society members
@@ -11,8 +12,13 @@ society_members = Table(
     Base.metadata,
     Column('society_id', Integer, ForeignKey('societies.id')),
     Column('parishioner_id', Integer, ForeignKey('parishioners.id')),
-    Column('status', String(20), default='active', nullable=False, server_default="active"),
     Column('join_date', DateTime, default=func.now(), nullable=True),
+    Column('membership_status', 
+           Enum(MembershipStatus), 
+           nullable=False, 
+           default=MembershipStatus.ACTIVE, server_default=MembershipStatus.ACTIVE.name),
+    Column('created_at', DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column('updated_at', DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 )
 
 
@@ -40,7 +46,7 @@ class Society(Base):
     __tablename__="societies"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
+    name = Column(String, unique=True, nullable=False)
     description = Column(Text, nullable=True)
     date_inaugurated = Column(Date, nullable=True)
 

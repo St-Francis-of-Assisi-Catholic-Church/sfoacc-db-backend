@@ -6,7 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import Parishioner, MedicalCondition
-from app.schemas.parishioner import MedicalConditionCreate, MedicalConditionRead, MedicalConditionUpdate, APIResponse
+from app.schemas.common import APIResponse
+from app.schemas.parishioner import MedicalConditionCreate, MedicalConditionRead, MedicalConditionUpdate
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -38,7 +38,6 @@ class ChurchIDConfirmationTemplate(BaseEmailTemplate):
             <p>This ID will be used for all official church activities and communications. 
             Please keep this information for your records.</p>
             
-            {cls.create_button("Access Your Account", login_url)}
             
             <p>If you believe there's an error with your church ID or need any assistance, 
             please contact the church administration office.</p>

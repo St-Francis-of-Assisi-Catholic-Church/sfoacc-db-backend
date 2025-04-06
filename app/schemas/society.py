@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from datetime import date, time, datetime
 from enum import Enum
 
+from app.models.common import MembershipStatus
 from app.models.society import MeetingFrequency, LeadershipRole
 
 # Society Leadership Schemas
@@ -94,4 +95,4 @@ class RemoveMembersRequest(BaseModel):
     parishioner_ids: List[int]
 
 class UpdateMemberStatusRequest(BaseModel):
-    status: Literal["active", "inactive", "suspended", "pending", "deceased"]
+    status: MembershipStatus  

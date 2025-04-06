@@ -1,8 +1,36 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import date, datetime
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Union
 from enum import Enum
-from app.models.parishioner import MembershipStatus, SacramentType, Gender, ParentalStatus, MaritalStatus, VerificationStatus 
+from app.models.parishioner import MembershipStatus, Gender, LifeStatus, MaritalStatus, VerificationStatus
+from app.models.sacrament import SacramentType
+from app.schemas.sacrament import SacramentRead 
+
+
+class ChurchCommunityBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class ChurchCommunityRead(ChurchCommunityBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PlaceOfWorshipBase(BaseModel):
+    name: str
+    location: Optional[str] = None
+    description: Optional[str] = None
+
+class PlaceOfWorshipRead(PlaceOfWorshipBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 # Base Schemas
 class OccupationBase(BaseModel):
@@ -22,15 +50,93 @@ class MedicalConditionBase(BaseModel):
     condition: str
     notes: Optional[str] = None
 
-class SacramentBase(BaseModel):
-    type: SacramentType
-    date: datetime
-    place: str
-    minister: str
+
+# ------- Parishioner Sacrements -------------
+# class ParSacramentBase(BaseModel):
+#     type: SacramentType
+#     date: datetime
+#     place: str
+#     minister: str
+class ParSacramentBase(BaseModel):
+    date_received: Optional[date] = None
+    place: Optional[str] = None
+    minister: Optional[str] = None
+    notes: Optional[str] = None
+
+class ParSacramentCreate(ParSacramentBase):
+    sacrament_id: Union[int, SacramentType]
+    
+    # Add validators if needed
+    # @validator('place', 'minister')
+    # def not_empty(cls, v):
+    #     if not v or not v.strip():
+    #         raise ValueError('Cannot be empty')
+    #     return v
+    
+class ParSacramentUpdate(BaseModel):
+    sacrament_id: Optional[int] = None
+    date_received: Optional[date] = None
+    place: Optional[str] = None
+    minister: Optional[str] = None
+    notes: Optional[str] = None
+    
+    # @validator('place', 'minister')
+    # def not_empty(cls, v):
+    #     if v is not None and not v.strip():
+    #         raise ValueError('Cannot be empty string')
+    #     return v
+    
+    class Config:
+        from_attributes = True
+    
+class ParSacramentRead(ParSacramentBase):
+    id: int
+    parishioner_id: int
+    # sacrament_id: int
+    sacrament: SacramentRead
+    
+    class Config:
+        from_attributes = True
 
 
+
+# -------- Societies --------
+class ParSocietyBase (BaseModel):
+    name: str
+    description: Optional[str] = None
+class ParSocietyRead(ParSocietyBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    name: str
+    description: Optional[str] = None
+
+    date_joined: Optional[datetime] = None
+    membership_status: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ------- Par Sklls ---
 class SkillBase(BaseModel):
     name: str
+
+
+# --------- Par Languages --------
+class ParLanguageRead(BaseModel):
+    assignment_date: datetime
+    last_updated: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class LanguagesAssignRequest(BaseModel):
+    language_ids: List[int]
+
+
+
 
 # Create Schemas
 class OccupationCreate(OccupationBase):
@@ -45,8 +151,7 @@ class EmergencyContactCreate(EmergencyContactBase):
 class MedicalConditionCreate(MedicalConditionBase):
     pass
 
-class SacramentCreate(SacramentBase):
-    pass
+
 
 class SkillCreate(SkillBase):
     pass
@@ -87,14 +192,6 @@ class MedicalConditionRead(MedicalConditionBase):
     class Config:
         from_attributes = True
 
-class SacramentRead(SacramentBase):
-    id: int
-    parishioner_id: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 class SkillRead(SkillBase):
     id: int
@@ -132,11 +229,11 @@ class ChildUpdate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
 class ParentInfo(BaseModel):
     name: Optional[str] = None
-    status: Optional[ParentalStatus] = None
+    status: Optional[LifeStatus] = None
 
 class SpouseInfo(BaseModel):
     name: Optional[str] = None
-    status: Optional[ParentalStatus] = None
+    status: Optional[LifeStatus] = None
     phone: Optional[str] = None
 
 class ChildInfo(BaseModel):
@@ -154,9 +251,9 @@ class FamilyInfoRead(BaseModel):
     spouse_status: Optional[str] = None
     spouse_phone: Optional[str] = None
     father_name: Optional[str] = None
-    father_status: Optional[ParentalStatus] = None
+    father_status: Optional[LifeStatus] = None
     mother_name: Optional[str] = None
-    mother_status: Optional[ParentalStatus] = None
+    mother_status: Optional[LifeStatus] = None
     children: List[ChildRead] = []
     created_at: datetime
     updated_at: datetime
@@ -170,9 +267,9 @@ class FamilyInfoUpdate(BaseModel):
     spouse_status: Optional[str] = Field(None, min_length=2, max_length=50)
     spouse_phone: Optional[str] = Field(None, min_length=2, max_length=20)
     father_name: Optional[str] = Field(None, min_length=2, max_length=100)
-    father_status: Optional[ParentalStatus] = None
+    father_status: Optional[LifeStatus] = None
     mother_name: Optional[str] = Field(None, min_length=2, max_length=100)
-    mother_status: Optional[ParentalStatus] = None
+    mother_status: Optional[LifeStatus] = None
     children: Optional[List[ChildUpdate]] = None
 
     class Config:
@@ -209,7 +306,7 @@ class ParishionerBase(BaseModel):
     mobile_number: str
     whatsapp_number: Optional[str] = None
     email_address: Optional[EmailStr] = None
-    place_of_worship: Optional[str] = None
+    # place_of_worship: Optional[str] = None
     current_residence: Optional[str] = None
 
     membership_status: Optional[MembershipStatus] = MembershipStatus.ACTIVE  # Default value
@@ -238,7 +335,8 @@ class ParishionerPartialUpdate(BaseModel):
     mobile_number: Optional[str] = None
     whatsapp_number: Optional[str] = None
     email_address: Optional[EmailStr] = None
-    place_of_worship: Optional[str] = None
+    place_of_worship_id: Optional[str] = None
+    church_community_id: Optional[str] = None
     current_residence: Optional[str] = None
 
     membership_status: Optional[MembershipStatus] = MembershipStatus.ACTIVE 
@@ -257,14 +355,14 @@ class ParishionerDetailedRead(ParishionerRead):
     occupation: Optional[OccupationRead] = None
     emergency_contacts: List[EmergencyContactRead] = []
     medical_conditions: List[MedicalConditionRead] = []
-    sacraments: List[SacramentRead] = []
+    sacraments: List[ParSacramentRead] = []
     skills: List[SkillRead] = []
     # languages: List[]
+    place_of_worship: Optional[PlaceOfWorshipRead] = None
+    church_community: Optional[ChurchCommunityRead] = None
+    societies: List[ParSocietyRead] = [] 
+    languages_spoken: List[Any] = []
 
     class Config:
         from_attributes = True
 
-# Response Models
-class APIResponse(BaseModel):
-    message: str
-    data: Any | None

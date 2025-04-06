@@ -40,6 +40,16 @@ init_db() {
     docker compose exec api python3 -m app.scripts.init_db
 }
 
+seed_church_data() {
+    echo -e "${GREEN}Seeding church data table...${NC}"
+    docker compose exec api python3 -m app.scripts.seed_sacraments
+    docker compose exec api python3 -m app.scripts.seed_church_communities
+    docker compose exec api python3 -m app.scripts.seed_place_of_worship
+    docker compose exec api python3 -m app.scripts.seed_church_societies
+    docker compose exec api python3 -m app.scripts.seed_languages
+    # add rest of date scripts here
+}
+
 # Function to create superuser
 create_superuser() {
     echo -e "${GREEN}Creating superuser...${NC}"
@@ -123,12 +133,16 @@ setup_project() {
 
     # create superuser
     create_superuser
+
+    # see data
+    seed_church_data
 }
 
 # Function to show help
 show_help() {
     echo -e "  ${GREEN}Available commands:${NC}"
     echo -e "  ${YELLOW}setup${NC}           - Initial project setup (directories, SSL, build)"
+    echo -e "  ${YELLOW}seed${NC}             - Seed church data"
     echo -e "  ${YELLOW}ssl${NC}             - Generate SSL certificates"
     echo -e "  ${YELLOW}initdb${NC}             - Initiative db"
     echo -e "  ${YELLOW}createsuperuser${NC}  - Create a superuser account"
@@ -148,6 +162,9 @@ case "$1" in
         ;;
     "setup")
         setup_project
+        ;;
+    "seed")
+        seed_church_data
         ;;
     "ssl")
         generate_ssl

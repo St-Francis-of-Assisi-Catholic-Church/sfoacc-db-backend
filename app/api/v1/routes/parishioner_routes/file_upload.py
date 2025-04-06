@@ -8,7 +8,7 @@ import csv
 from app.api.deps import SessionDep, CurrentUser
 from app.core.database import Database as db
 from app.models.user import UserRole
-from app.services.parisioner_file_import import ParishionerImportService
+from app.services.parishioner_file_import import ParishionerImportService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -114,7 +114,7 @@ async def get_import_template():
             "Emergency Contact Number",
             "Any Medical Condition",
             "If Yes, Please State",
-            "Church Sacrements",
+            "Church sacraments",
             "Marital Status",
             "Spouse Name",
             "Name of Kids (if any)",
@@ -132,7 +132,7 @@ async def get_import_template():
             "Gender should be 'Male' or 'Female'",
             "Skills/Talents can be comma-separated list",
             "Name of Kids can be comma-separated list",
-            "Church Sacrements should be semicolon-separated list of sacraments (e.g., 'Baptism;First Communion')",
+            "Church sacraments should be semicolon-separated list of sacraments (e.g., 'Baptism;First Communion')",
             "Father's Life Status and Mother's Life Status should indicate if 'Alive' or 'Deceased'"
         ]
     }

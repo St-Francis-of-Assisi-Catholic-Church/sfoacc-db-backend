@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import SessionDep, CurrentUser
 from app.models.parishioner import Parishioner, Skill
-from app.schemas.parishioner import APIResponse, SkillCreate, SkillRead, SkillBase
+from app.schemas.common import APIResponse
+from app.schemas.parishioner import  SkillCreate, SkillRead, SkillBase
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

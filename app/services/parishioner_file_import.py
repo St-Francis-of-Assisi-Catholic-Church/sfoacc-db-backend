@@ -5,11 +5,13 @@ from datetime import datetime
 import uuid
 from typing import Dict, List, Any, Optional
 
+from app.models.language import Language
 from app.models.parishioner import (
-    Parishioner, Occupation, FamilyInfo, Child, 
-    EmergencyContact, MedicalCondition, Sacrament, Skill, Language,
-    Gender, MaritalStatus, ParentalStatus, VerificationStatus, MembershipStatus, SacramentType
+    LifeStatus, Parishioner, Occupation, FamilyInfo, Child, 
+    EmergencyContact, MedicalCondition, ParishionerSacrament, Skill,
+    Gender, MaritalStatus, VerificationStatus, MembershipStatus
 )
+from app.models.sacrament import SacramentType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -106,18 +108,18 @@ class ParishionerImportService:
         else:
             return MaritalStatus.SINGLE
 
-    def map_parental_status(self, status_str) -> ParentalStatus:
+    def map_parental_status(self, status_str) -> LifeStatus:
         """Map parental status string to ParentalStatus enum"""
         if pd.isna(status_str) or not status_str:
-            return ParentalStatus.UNKNOWN
+            return LifeStatus.UNKNOWN
         
         status_str = str(status_str).lower().strip()
         if "alive" in status_str:
-            return ParentalStatus.ALIVE
+            return LifeStatus.ALIVE
         elif "deceased" in status_str:
-            return ParentalStatus.DECEASED
+            return LifeStatus.DECEASED
         else:
-            return ParentalStatus.UNKNOWN
+            return LifeStatus.UNKNOWN
 
     def generate_church_id(self, first_name: str, last_name: str, date_of_birth: datetime.date, old_church_id: str = None) -> str:
         """
@@ -181,7 +183,7 @@ class ParishionerImportService:
                 sacrament_type = SacramentType.MATRIMONY
             
             if sacrament_type:
-                sacrament = Sacrament(
+                sacrament = ParishionerSacrament(
                     parishioner_id=parishioner_id,
                     type=sacrament_type,
                     date=datetime.now().date(),  # Default to today since we don't have actual date
@@ -339,7 +341,7 @@ class ParishionerImportService:
 
             
             # Process sacraments
-            self.process_sacraments(parishioner.id, row.get("Church Sacrements", ""))
+            self.process_sacraments(parishioner.id, row.get("Church sacraments", ""))
             
             self.db.commit()
             return {"success": True, "parishioner_id": parishioner.id}
