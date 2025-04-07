@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
 from app.api.deps import SessionDep, CurrentUser
+from app.models.common import MembershipStatus
 from app.models.society import Society, SocietyLeadership, LeadershipRole, MeetingFrequency
 from app.models.parishioner import Parishioner
 from app.schemas.common import APIResponse
@@ -771,7 +772,8 @@ async def add_members_to_society(
     """
     Add members to a society.
     
-    Members are added with 'active' status by default and the current date as join date.
+    Members can be added with a specific join date, otherwise the current date is used.
+    Each member is added with 'active' status by default.
     """
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
@@ -794,8 +796,8 @@ async def add_members_to_society(
         existing = 0
         not_found = 0
         
-        for p_id in members.parishioner_ids:
-            parishioner = session.query(Parishioner).filter(Parishioner.id == p_id).first()
+        for member in members.members:
+            parishioner = session.query(Parishioner).filter(Parishioner.id == member.parishioner_id).first()
             if not parishioner:
                 not_found += 1
                 continue
@@ -803,27 +805,34 @@ async def add_members_to_society(
             # Check if already a member
             is_member = session.query(association_table).filter(
                 association_table.c.society_id == society_id,
-                association_table.c.parishioner_id == p_id
+                association_table.c.parishioner_id == member.parishioner_id
             ).first()
             
             if is_member:
                 existing += 1
                 continue
             
-            # Add to society with membership_status and join_date
-            now = datetime.now()
+            # Use provided join date or default to current date
+            join_date = None
+            if member.date_joined:
+                try:
+                    # Parse date from string format YYYY-MM-DD
+                    join_date = datetime.strptime(member.date_joined, '%Y-%m-%d').date()
+                except ValueError:
+                    # If date parsing fails, use current date
+                    join_date = datetime.now().date()
+            else:
+                join_date = datetime.now().date()
             
-            # Use direct SQL insert for the association table to include membership_status and join_date
             # Get the MembershipStatus enum for ACTIVE
-            from app.models.common import MembershipStatus
             active_status = MembershipStatus.ACTIVE
             
             # Insert with correct column names
             stmt = association_table.insert().values(
                 society_id=society_id,
-                parishioner_id=p_id,
-                membership_status=active_status,  # Changed from status to membership_status
-                join_date=now
+                parishioner_id=member.parishioner_id,
+                membership_status=active_status,
+                join_date=join_date
             )
             session.execute(stmt)
             added += 1
@@ -849,7 +858,8 @@ async def add_members_to_society(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
+    
+    
 @router.delete("/{society_id}/members", response_model=APIResponse)
 async def remove_members_from_society(
     *,
