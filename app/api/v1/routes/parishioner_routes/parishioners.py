@@ -98,7 +98,7 @@ async def get_all_parishioners(
     session: SessionDep,
     current_user: CurrentUser,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    limit: int = Query(1000, ge=1, le=1000),
     search: Optional[str] = None
 ) -> Any:
     """Get list of all parishioners with pagination with an optional search by parishioner id, church ids, or any name"""

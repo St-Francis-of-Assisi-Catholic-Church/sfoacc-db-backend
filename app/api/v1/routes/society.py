@@ -1,6 +1,6 @@
 import logging
 from typing import Any, List, Optional, Dict, Literal
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, BackgroundTasks
+from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Path, BackgroundTasks
 from sqlalchemy import func, Column, ForeignKey, String, Boolean, Table, DateTime, text
 from sqlalchemy.orm import Session, joinedload, relationship
 from sqlalchemy.exc import IntegrityError
@@ -866,7 +866,7 @@ async def remove_members_from_society(
     session: SessionDep,
     current_user: CurrentUser,
     society_id: int,
-    members: RemoveMembersRequest
+    members: RemoveMembersRequest = Body(...)
 ) -> Any:
     """
     Remove members from a society.
