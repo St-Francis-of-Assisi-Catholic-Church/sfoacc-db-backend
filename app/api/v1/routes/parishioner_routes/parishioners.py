@@ -21,7 +21,6 @@ from app.api.v1.routes.parishioner_routes.medical_conditions import medical_cond
 from app.api.v1.routes.parishioner_routes.family_info import family_info_router
 from app.api.v1.routes.parishioner_routes.sacraments import sacraments_router
 from app.api.v1.routes.parishioner_routes.skills import skills_router
-from app.api.v1.routes.parishioner_routes.file_upload import file_upload_router
 from app.api.v1.routes.parishioner_routes.verification_msg import verify_router
 from app.api.v1.routes.parishioner_routes.languages import languages_router
 
@@ -215,26 +214,29 @@ async def get_detailed_parishioner(
         }
 
     # Format societies data to include relevant fields
+    # Format societies data to include relevant fields
     societies_data = []
     if parishioner.societies:
         # Import the association table to query membership details
         from app.models.society import society_members
         
         for society in parishioner.societies:
-            # Query the association table for membership details
+            # Query the association table for membership details directly
             membership_details = session.query(society_members).filter(
                 society_members.c.parishioner_id == parishioner_id,
                 society_members.c.society_id == society.id
             ).first()
             
+            # Log the details properly to see what's available
+            logger.info(f"Society: {society.name}, Membership details: {membership_details}")
+            
             # Get date_joined and membership_status from the association table
             date_joined = None
             membership_status = None
             if membership_details:
-                # Use column names from your society_members table
-                # Adjust these field names to match your actual column names
-                date_joined = membership_details.date_joined if hasattr(membership_details, 'date_joined') else None
-                membership_status = membership_details.membership_status if hasattr(membership_details, 'membership_status') else None
+                # Access the columns by their names as dictionary keys
+                date_joined = membership_details._mapping.get('join_date')
+                membership_status = membership_details._mapping.get('membership_status')
             
             societies_data.append({
                 "id": society.id,
@@ -245,7 +247,7 @@ async def get_detailed_parishioner(
                 "created_at": society.created_at,
                 "updated_at": society.updated_at,
             })
-
+ 
     languages_data = []
     if parishioner.languages_rel:
         for language in parishioner.languages_rel:
@@ -596,11 +598,6 @@ languages_router,
 prefix="/{parishioner_id}/languages",
 )
 
-# file upload
-router.include_router(
-file_upload_router,
-prefix="/import"
-)
 
 
 # verification msg
