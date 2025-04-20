@@ -820,9 +820,9 @@ async def add_members_to_society(
                     join_date = datetime.strptime(member.date_joined, '%Y-%m-%d').date()
                 except ValueError:
                     # If date parsing fails, use current date
-                    join_date = datetime.now().date()
+                    join_date = None
             else:
-                join_date = datetime.now().date()
+                join_date = None
             
             # Get the MembershipStatus enum for ACTIVE
             active_status = MembershipStatus.ACTIVE
