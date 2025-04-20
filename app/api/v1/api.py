@@ -6,6 +6,7 @@ from app.api.v1.routes import sacrament
 from app.api.v1.routes import church_community
 from app.api.v1.routes import place_of_worship
 from app.api.v1.routes import languages
+from app.api.v1.routes import uploads
 
 
 api_router = APIRouter()
@@ -21,6 +22,8 @@ api_router.include_router(church_community.router, prefix="/church-community", t
 api_router.include_router(parishioners.router, prefix="/parishioners", tags=['parishioner'])
 api_router.include_router(society.router, prefix="/societies", tags=["societies"])
 api_router.include_router(statistics.router, prefix="/statistics", tags=["statistics"])
+
+api_router.include_router(uploads.router,  prefix="/uploads", tags=["uploads"] )
 
 
 

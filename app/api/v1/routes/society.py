@@ -1,6 +1,6 @@
 import logging
 from typing import Any, List, Optional, Dict, Literal
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, BackgroundTasks
+from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Path, BackgroundTasks
 from sqlalchemy import func, Column, ForeignKey, String, Boolean, Table, DateTime, text
 from sqlalchemy.orm import Session, joinedload, relationship
 from sqlalchemy.exc import IntegrityError
@@ -820,9 +820,9 @@ async def add_members_to_society(
                     join_date = datetime.strptime(member.date_joined, '%Y-%m-%d').date()
                 except ValueError:
                     # If date parsing fails, use current date
-                    join_date = datetime.now().date()
+                    join_date = None
             else:
-                join_date = datetime.now().date()
+                join_date = None
             
             # Get the MembershipStatus enum for ACTIVE
             active_status = MembershipStatus.ACTIVE
@@ -866,7 +866,7 @@ async def remove_members_from_society(
     session: SessionDep,
     current_user: CurrentUser,
     society_id: int,
-    members: RemoveMembersRequest
+    members: RemoveMembersRequest = Body(...)
 ) -> Any:
     """
     Remove members from a society.
