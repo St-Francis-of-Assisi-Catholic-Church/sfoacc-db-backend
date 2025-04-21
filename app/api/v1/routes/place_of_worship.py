@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/", response_model=APIResponse)
+@router.get("/all", response_model=APIResponse)
 async def get_places_of_worship(
     *,
     session: SessionDep,

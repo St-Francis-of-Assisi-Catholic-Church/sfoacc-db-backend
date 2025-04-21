@@ -88,8 +88,12 @@ class SocietyDetailResponse(SocietyResponse):
         orm_mode = True
 
 # Member Management Schemas
+class MemberData(BaseModel):
+    parishioner_id: int
+    date_joined: str = None
+
 class AddMembersRequest(BaseModel):
-    parishioner_ids: List[int]
+    members: List[MemberData]
 
 class RemoveMembersRequest(BaseModel):
     parishioner_ids: List[int]

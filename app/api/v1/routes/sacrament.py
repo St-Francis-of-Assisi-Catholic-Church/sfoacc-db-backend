@@ -77,7 +77,7 @@ def initialize_sacraments(db: Session):
         db.rollback()
         logger.error(f"Error initializing sacraments: {str(e)}")
 
-@router.get("/", response_model=APIResponse)
+@router.get("/all", response_model=APIResponse)
 async def get_sacraments(
     *,
     session: SessionDep,

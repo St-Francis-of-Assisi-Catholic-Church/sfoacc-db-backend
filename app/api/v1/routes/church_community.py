@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/", response_model=APIResponse)
+@router.get("/all", response_model=APIResponse)
 async def get_church_communities(
     *,
     session: SessionDep,
@@ -61,7 +61,7 @@ async def get_church_communities(
             detail=f"Error retrieving church communities: {str(e)}"
         )
 
-@router.post("/", response_model=APIResponse)
+@router.post("", response_model=APIResponse)
 async def create_church_community(
     *,
     session: SessionDep,
