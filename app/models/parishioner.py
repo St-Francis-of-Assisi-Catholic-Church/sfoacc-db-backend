@@ -22,7 +22,7 @@ parishioner_languages = Table(
     'par_languages', 
     Base.metadata,
     Column('parishioner_id', Integer, ForeignKey('parishioners.id', ondelete="CASCADE")),
-    Column('language_id', Integer, ForeignKey('languages.id')) ,
+    Column('language_id', Integer, ForeignKey('languages.id', ondelete="CASCADE")) ,
     Column('created_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now()),
     Column('updated_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=func.now())
 )
@@ -37,7 +37,7 @@ class ParishionerSacrament(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     parishioner_id = Column(Integer, ForeignKey('parishioners.id', ondelete="CASCADE"), nullable=False)
-    sacrament_id = Column(Integer, ForeignKey('sacrament.id'), nullable=False)
+    sacrament_id = Column(Integer, ForeignKey('sacrament.id', ondelete="CASCADE"), nullable=False)
     date_received = Column(Date, nullable=True)
     place = Column(String, nullable=True)
     minister = Column(String, nullable=True)
@@ -152,7 +152,7 @@ class Child(Base):
     __tablename__ = "par_children"
 
     id = Column(Integer, primary_key=True, index=True)
-    family_info_id = Column(Integer, ForeignKey("par_family.id"))
+    family_info_id = Column(Integer, ForeignKey("par_family.id", ondelete="CASCADE"))
     name = Column(String, nullable=False)
 
     family_ref = db_relationship("FamilyInfo", back_populates="children_rel")
