@@ -21,6 +21,7 @@ class MaritalStatus(str, enum.Enum):
     MARRIED = "married"
     WIDOWED = "widowed"
     DIVORCED = "divorced"
+    SEPARATED = "separated"
 
 class LifeStatus(str, enum.Enum):
     ALIVE = "alive"

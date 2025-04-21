@@ -123,6 +123,26 @@ async def get_parishioner_stats(
         
         gender_distribution = {g[0].value if g[0] else "Not specified": g[1] for g in gender_stats}
         
+        # Marital status distribution
+        from app.models.common import MaritalStatus
+        
+        # Initialize with 0 counts for all marital statuses
+        marital_status_distribution = {status.value: 0 for status in MaritalStatus}
+        
+        # Get actual counts
+        marital_status_stats = (
+            session.query(
+                ParishionerModel.marital_status,
+                func.count(ParishionerModel.id)
+            )
+            .group_by(ParishionerModel.marital_status)
+            .all()
+        )
+        
+        for status, count in marital_status_stats:
+            if status is not None:
+                marital_status_distribution[status.value] = count
+        
         # Age group distribution
         current_year = datetime.utcnow().year
         age_groups = {
@@ -156,6 +176,72 @@ async def get_parishioner_stats(
         # Total church communities
         from app.models.church_community import ChurchCommunity
         total_communities = session.query(func.count(ChurchCommunity.id)).scalar()
+        
+        # 10. Distribution of parishioners by place of worship
+        place_of_worship_distribution = {}
+        
+        # Get all places of worship first to ensure we include those with zero counts
+        all_places = session.query(PlaceOfWorship.id, PlaceOfWorship.name).all()
+        
+        # Initialize with 0 counts for all places
+        for place_id, place_name in all_places:
+            place_of_worship_distribution[place_name] = 0
+        
+        # Update with actual counts
+        place_of_worship_stats = (
+            session.query(
+                PlaceOfWorship.name,
+                func.count(ParishionerModel.id)
+            )
+            .join(ParishionerModel, PlaceOfWorship.id == ParishionerModel.place_of_worship_id)
+            .group_by(PlaceOfWorship.name)
+            .all()
+        )
+        
+        for place_name, count in place_of_worship_stats:
+            if place_name is not None:
+                place_of_worship_distribution[place_name] = count
+                
+        # Add count for parishioners with no place of worship
+        no_place_count = (
+            session.query(func.count(ParishionerModel.id))
+            .filter(ParishionerModel.place_of_worship_id.is_(None))
+            .scalar()
+        )
+        place_of_worship_distribution["Not specified"] = no_place_count
+        
+        # 11. Distribution of parishioners by church community
+        church_community_distribution = {}
+        
+        # Get all church communities first to ensure we include those with zero counts
+        all_communities = session.query(ChurchCommunity.id, ChurchCommunity.name).all()
+        
+        # Initialize with 0 counts for all communities
+        for community_id, community_name in all_communities:
+            church_community_distribution[community_name] = 0
+        
+        # Update with actual counts
+        church_community_stats = (
+            session.query(
+                ChurchCommunity.name,
+                func.count(ParishionerModel.id)
+            )
+            .join(ParishionerModel, ChurchCommunity.id == ParishionerModel.church_community_id)
+            .group_by(ChurchCommunity.name)
+            .all()
+        )
+        
+        for community_name, count in church_community_stats:
+            if community_name is not None:
+                church_community_distribution[community_name] = count
+                
+        # Add count for parishioners with no church community
+        no_community_count = (
+            session.query(func.count(ParishionerModel.id))
+            .filter(ParishionerModel.church_community_id.is_(None))
+            .scalar()
+        )
+        church_community_distribution["Not specified"] = no_community_count
 
         stats = {
             "total_parishioners": total_parishioners,
@@ -168,7 +254,10 @@ async def get_parishioner_stats(
             "day_of_week_born_distribution": day_of_week_distribution,
             "sacraments_distribution": sacrament_distribution,
             "gender_distribution": gender_distribution,
-            "age_group_distribution": age_groups
+            "marital_status_distribution": marital_status_distribution,
+            "age_group_distribution": age_groups,
+            "place_of_worship_distribution": place_of_worship_distribution,
+            "church_community_distribution": church_community_distribution
         }
 
         return APIResponse(
@@ -182,8 +271,7 @@ async def get_parishioner_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving parishioner statistics: {str(e)}"
         )
-    
-    
+
 @router.get("/registration", response_model=APIResponse)
 async def get_registration_stats(
     session: SessionDep,

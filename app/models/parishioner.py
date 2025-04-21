@@ -11,7 +11,7 @@ from app.models.society import society_members
 parishioner_skills = Table(
     'par_parishioner_skills',
     Base.metadata,
-    Column('parishioner_id', Integer, ForeignKey('parishioners.id')),
+    Column('parishioner_id', Integer, ForeignKey('parishioners.id', ondelete="CASCADE")),
     Column('skill_id', Integer, ForeignKey('par_skills.id')),
     Column('created_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now()),
     Column('updated_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=func.now())
@@ -21,7 +21,7 @@ parishioner_skills = Table(
 parishioner_languages = Table(
     'par_languages', 
     Base.metadata,
-    Column('parishioner_id', Integer, ForeignKey('parishioners.id')),
+    Column('parishioner_id', Integer, ForeignKey('parishioners.id', ondelete="CASCADE")),
     Column('language_id', Integer, ForeignKey('languages.id')) ,
     Column('created_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now()),
     Column('updated_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=func.now())
@@ -36,7 +36,7 @@ class ParishionerSacrament(Base):
     __tablename__ = "par_sacraments"
     
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey('parishioners.id'), nullable=False)
+    parishioner_id = Column(Integer, ForeignKey('parishioners.id', ondelete="CASCADE"), nullable=False)
     sacrament_id = Column(Integer, ForeignKey('sacrament.id'), nullable=False)
     date_received = Column(Date, nullable=True)
     place = Column(String, nullable=True)
@@ -73,7 +73,7 @@ class Parishioner(Base):
     last_name = Column(String, nullable=False)
     maiden_name = Column(String, nullable=True)
     gender = Column(Enum(Gender), nullable=False)
-    date_of_birth = Column(Date, nullable=False)
+    date_of_birth = Column(Date, nullable=True)
     place_of_birth = Column(String, nullable=True)
     hometown = Column(String, nullable=True)
     region = Column(String, nullable=True)
@@ -85,18 +85,20 @@ class Parishioner(Base):
     current_residence = Column(String, nullable=True)
     
     # Foreign keys for related models
-    church_community_id = Column(Integer, ForeignKey("church_communities.id"), nullable=True)
-    place_of_worship_id = Column(Integer, ForeignKey("places_of_worship.id"), nullable=True)
+    church_community_id = Column(Integer, ForeignKey("church_communities.id", ondelete="CASCADE"), nullable=True)
+    place_of_worship_id = Column(Integer, ForeignKey("places_of_worship.id", ondelete="CASCADE"), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 
     # Relationships
-    occupation_rel = db_relationship("Occupation", back_populates="parishioner_ref", uselist=False)
-    family_info_rel = db_relationship("FamilyInfo", back_populates="parishioner_ref", uselist=False)
-    emergency_contacts_rel = db_relationship("EmergencyContact", back_populates="parishioner_ref")
-    medical_conditions_rel = db_relationship("MedicalCondition", back_populates="parishioner_ref")
+    occupation_rel = db_relationship("Occupation", back_populates="parishioner_ref", uselist=False, cascade="all, delete-orphan")
+    family_info_rel = db_relationship("FamilyInfo", back_populates="parishioner_ref", uselist=False, cascade="all, delete-orphan")
+    emergency_contacts_rel = db_relationship("EmergencyContact", back_populates="parishioner_ref", cascade="all, delete-orphan")
+    medical_conditions_rel = db_relationship("MedicalCondition", back_populates="parishioner_ref", cascade="all, delete-orphan")
+
+    # no need for cascade for many-to-many
     skills_rel = db_relationship("Skill", secondary=parishioner_skills, back_populates="parishioners_ref")
     languages_rel = db_relationship("Language", secondary=parishioner_languages, back_populates="parishioners_ref")
     
@@ -106,13 +108,13 @@ class Parishioner(Base):
     # New relationships for the added models
     church_community = db_relationship("ChurchCommunity", backref="parishioners")
     place_of_worship = db_relationship("PlaceOfWorship", backref="parishioners")
-    sacrament_records = db_relationship("ParishionerSacrament", back_populates="parishioner")
+    sacrament_records = db_relationship("ParishionerSacrament", back_populates="parishioner", cascade="all, delete-orphan")
 
 class Occupation(Base):
     __tablename__ = "par_occupations"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id"), unique=True)
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"), unique=True)
     role = Column(String, nullable=False)
     employer = Column(String, nullable=False)
 
@@ -126,7 +128,7 @@ class FamilyInfo(Base):
     __tablename__ = "par_family"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id"), unique=True)
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"), unique=True)
     
     # Spouse Information
     spouse_name = Column(String, nullable=True)
@@ -140,7 +142,7 @@ class FamilyInfo(Base):
     mother_status = Column(Enum(LifeStatus), nullable=True)
 
     parishioner_ref = db_relationship("Parishioner", back_populates="family_info_rel")
-    children_rel = db_relationship("Child", back_populates="family_ref")
+    children_rel = db_relationship("Child", back_populates="family_ref", cascade="all, delete-orphan")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
@@ -163,7 +165,7 @@ class EmergencyContact(Base):
     __tablename__ = "par_emergency_contacts"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"))
     name = Column(String, nullable=False)
     relationship = Column(String, nullable=False)
     primary_phone = Column(String, nullable=False)
@@ -179,7 +181,7 @@ class MedicalCondition(Base):
     __tablename__ = "par_medical_conditions"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id"))
+    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"))
     condition = Column(String, nullable=False)
     notes = Column(Text, nullable=True)
 
