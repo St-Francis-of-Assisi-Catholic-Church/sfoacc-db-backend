@@ -142,7 +142,7 @@ def preprocess_csv_data(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-@file_upload_router.post("/parishioners", status_code=status.HTTP_201_CREATED)
+@file_upload_router.post("/batch", status_code=status.HTTP_201_CREATED)
 async def upload_parishioners_csv(
     session: SessionDep,
     current_user: CurrentUser,
@@ -236,7 +236,10 @@ async def get_import_template():
     Get information about the expected file format for parishioner import.
     """
     return {
-        "required_columns": [
+        "success": True,
+        "message": "Templete fetched successfully",
+        "template": {
+            "required_columns": [
             "Last Name (Surname)", 
             "First Name",
             "Date of Birth",
@@ -280,7 +283,7 @@ async def get_import_template():
             "The file can be CSV or TSV format",
             "Date of Birth should be in format YYYY-MM-DD (e.g., 1990-05-20)",
             "Gender should be 'Male' or 'Female'",
-            "Multiple items should be separated by semicolons (;)",
+            "Multiple items should be separated by semicolons (;) or coma (,)",
             "Names will be converted to sentence case",
             "Required fields: Last Name, First Name, Date of Birth, Gender"
         ],
@@ -294,6 +297,7 @@ async def get_import_template():
                 "Skills/Talents": "Singing;Playing Piano;Teaching"
             }
         ]
+        }
     }
 
 
