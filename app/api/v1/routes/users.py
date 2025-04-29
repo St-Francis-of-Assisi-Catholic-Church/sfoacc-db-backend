@@ -1,5 +1,6 @@
 import logging
 from typing import Any
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
@@ -22,7 +23,7 @@ router = APIRouter()
 
 @router.get("/users/{user_id}", response_model=APIResponse)
 async def get_user(
-    user_id: int,
+    user_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -74,7 +75,7 @@ async def update_user(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    user_id: int,
+    user_id: UUID,
     user_in: UserUpdate,
 ) -> Any:
     """
@@ -154,7 +155,7 @@ async def delete_user(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    user_id: int,
+    user_id: UUID,
 ) -> Any:
     """
     Delete existing user.
@@ -260,7 +261,7 @@ async def create_user(
         return  APIResponse(
             message = "User created successfully" + 
                       (" and welcome email sent" if email_sent else " but email sending failed"),
-            user = User.model_validate(user)
+            data = User.model_validate(user)
         )
 
     except Exception as e:

@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -17,7 +18,7 @@ from app.models.user import User as UserModel, UserStatus
 
 
 class TokenPayload(BaseModel):
-    sub: int | None = None
+    sub: str | None = None
 
 # OAuth2 scheme setup
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -90,7 +91,13 @@ def get_current_user(
             detail="Invalid token payload"
         )
     
-    user = session.query(UserModel).filter(UserModel.id == token_data.sub).first()
+    try:
+        user_id = UUID(token_data.sub)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Invalud userID format")
+
+    user = session.query(UserModel).filter(UserModel.id == user_id).first()
     
     # Centralized status checking
     check_user_status(user)

@@ -1,4 +1,5 @@
 import uuid
+from uuid import UUID
 from typing import Any, List
 from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks, Request, Response
 from fastapi.responses import HTMLResponse
@@ -20,7 +21,7 @@ verify_router = APIRouter()
 async def send_verification_message(
     *,
     session: SessionDep,
-    parishioner_id: int,
+    parishioner_id: UUID,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
 ) -> Any:
@@ -128,7 +129,7 @@ async def view_verification_page(
 async def send_batch_verification_messages(
     *,
     session: SessionDep,
-    parishioner_ids: List[int],
+    parishioner_ids: List[UUID],
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
 ) -> Any:

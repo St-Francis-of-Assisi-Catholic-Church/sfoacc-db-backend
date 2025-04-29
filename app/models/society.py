@@ -1,6 +1,6 @@
 from datetime import datetime
 import enum
-from sqlalchemy import Column, ForeignKey, Integer, Date, DateTime, String, Table, Text, Time, func, Enum
+from sqlalchemy import UUID, Column, ForeignKey, Integer, Date, DateTime, String, Table, Text, Time, func, Enum
 from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
 from app.models.common import MembershipStatus
@@ -11,7 +11,7 @@ society_members = Table(
     'par_society_members',
     Base.metadata,
     Column('society_id', Integer, ForeignKey('societies.id', ondelete="CASCADE")),
-    Column('parishioner_id', Integer, ForeignKey('parishioners.id', ondelete="CASCADE")),
+    Column('parishioner_id', UUID(as_uuid=True), ForeignKey('parishioners.id', ondelete="CASCADE")),
     Column('join_date', DateTime, nullable=True),
     Column('membership_status', 
            Enum(MembershipStatus), 
@@ -73,7 +73,7 @@ class SocietyLeadership(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     society_id = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"))
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"))
+    parishioner_id = Column(UUID(as_uuid=True), ForeignKey("parishioners.id", ondelete="CASCADE"))
     role = Column(Enum(LeadershipRole), nullable=False)
     custom_role = Column(String, nullable=True)  
     elected_date = Column(Date, nullable=True)

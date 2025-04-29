@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from app.models.user import UserRole, UserStatus
@@ -33,7 +34,7 @@ class UserUpdate(BaseModel):
         return v
 
 class UserInDB(UserBase):
-    id: int
+    id: UUID
     status: UserStatus
     hashed_password: str
 
@@ -41,7 +42,7 @@ class UserInDB(UserBase):
         from_attributes = True
 
 class User(BaseModel):
-    id: int
+    id: UUID
     email: EmailStr
     full_name: str
     role: UserRole

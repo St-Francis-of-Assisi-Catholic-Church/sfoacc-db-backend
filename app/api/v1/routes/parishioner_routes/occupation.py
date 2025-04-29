@@ -1,5 +1,6 @@
 import logging
 from typing import Any
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 occupation_router = APIRouter()
 
 # Helper function to get parishioner or raise 404
-def get_parishioner_or_404(session: Session, parishioner_id: int):
+def get_parishioner_or_404(session: Session, parishioner_id: UUID):
     parishioner = session.query(Parishioner).filter(
         Parishioner.id == parishioner_id
     ).first()
@@ -32,7 +33,7 @@ def get_parishioner_or_404(session: Session, parishioner_id: int):
 @occupation_router.post("", response_model=APIResponse)
 async def create_occupation(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     occupation_in: OccupationCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -98,7 +99,7 @@ async def create_occupation(
 # Get occupation for a parishioner
 @occupation_router.get("", response_model=APIResponse)
 async def get_occupation(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -126,7 +127,7 @@ async def get_occupation(
 @occupation_router.put("", response_model=APIResponse)
 async def update_occupation(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     occupation_in: OccupationUpdate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -184,7 +185,7 @@ async def update_occupation(
 # Delete occupation for a parishioner
 @occupation_router.delete("", response_model=APIResponse)
 async def delete_occupation(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:

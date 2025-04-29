@@ -1,5 +1,6 @@
 import logging
 from typing import Any, List, Optional, Dict, Literal
+from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, status, Query, Path, BackgroundTasks
 from sqlalchemy import func, Column, ForeignKey, String, Boolean, Table, DateTime, text
 from sqlalchemy.orm import Session, joinedload, relationship
@@ -1007,7 +1008,7 @@ async def update_member_status(
     session: SessionDep,
     current_user: CurrentUser,
     society_id: int,
-    parishioner_id: int,
+    parishioner_id: UUID,
     status_update: UpdateMemberStatusRequest
 ) -> Any:
     """
