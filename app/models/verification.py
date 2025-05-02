@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, func
+from sqlalchemy import UUID, Column, Integer, String, DateTime, ForeignKey, Text, func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -7,7 +7,7 @@ class VerificationRecord(Base):
     __tablename__ = "verification_records"
 
     id = Column(String, primary_key=True)  # UUID for the verification
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"))
+    parishioner_id = Column(UUID(as_uuid=True), ForeignKey("parishioners.id", ondelete="CASCADE"))
     html_content = Column(Text, nullable=False)  # Store the generated HTML
     access_code = Column(String, nullable=False)  # Store the access code
     expires_at = Column(DateTime(timezone=True), nullable=False)  # Set expiration time

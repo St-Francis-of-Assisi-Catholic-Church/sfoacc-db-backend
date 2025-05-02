@@ -1,4 +1,5 @@
 from typing import List, Literal, Optional
+from uuid import UUID
 from pydantic import BaseModel, Field
 from datetime import date, time, datetime
 from enum import Enum
@@ -14,7 +15,7 @@ class SocietyLeadershipBase(BaseModel):
     end_date: Optional[date] = None
 
 class SocietyLeadershipCreate(SocietyLeadershipBase):
-    parishioner_id: int
+    parishioner_id: UUID
 
 class SocietyLeadershipUpdate(BaseModel):
     role: Optional[LeadershipRole] = None
@@ -26,7 +27,7 @@ class SocietyLeadershipUpdate(BaseModel):
 class SocietyLeadershipInDB(SocietyLeadershipBase):
     id: int
     society_id: int
-    parishioner_id: int
+    parishioner_id: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -35,7 +36,7 @@ class SocietyLeadershipInDB(SocietyLeadershipBase):
 
 class SocietyLeadershipResponse(SocietyLeadershipBase):
     id: int
-    parishioner_id: int
+    parishioner_id: UUID
     parishioner_name: str = Field(..., description="First and last name of the parishioner")
     parishioner_church_id: Optional[str] = Field(None, description="Church ID of the parishioner")
     parishioner_contact: Optional[str] = Field(None, description="Mobile number of the parishioner")
@@ -89,14 +90,14 @@ class SocietyDetailResponse(SocietyResponse):
 
 # Member Management Schemas
 class MemberData(BaseModel):
-    parishioner_id: int
+    parishioner_id: UUID
     date_joined: str = None
 
 class AddMembersRequest(BaseModel):
     members: List[MemberData]
 
 class RemoveMembersRequest(BaseModel):
-    parishioner_ids: List[int]
+    parishioner_ids: List[UUID]
 
 class UpdateMemberStatusRequest(BaseModel):
     status: MembershipStatus  

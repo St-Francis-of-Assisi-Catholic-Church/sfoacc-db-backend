@@ -1,5 +1,6 @@
 import logging
 from typing import Any, Dict, List
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Path as FastAPIPath
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 family_info_router = APIRouter()
 
 # Helper function to get parishioner or raise 404
-def get_parishioner_or_404(session: Session, parishioner_id: int):
+def get_parishioner_or_404(session: Session, parishioner_id: UUID):
     parishioner = session.query(Parishioner).filter(
         Parishioner.id == parishioner_id
     ).first()
@@ -36,7 +37,7 @@ def get_parishioner_or_404(session: Session, parishioner_id: int):
 @family_info_router.post("/", response_model=APIResponse)
 async def create_or_update_family_info(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     family_info_in: FamilyInfoUpdate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -149,7 +150,7 @@ async def create_or_update_family_info(
 # Get family info for a parishioner
 @family_info_router.get("/", response_model=APIResponse)
 async def get_family_info(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -179,7 +180,7 @@ async def get_family_info(
 # batch adding of pa
 @family_info_router.post("/batch", response_model=APIResponse)
 async def batch_update_family_info(
-    parishioner_id: int,
+    parishioner_id: UUID,
     family_batch: Dict[str, Any],  # Use Dict instead of Pydantic model
     session: SessionDep,
     current_user: CurrentUser,

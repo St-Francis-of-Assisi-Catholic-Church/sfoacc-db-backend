@@ -1,5 +1,6 @@
 import logging
 from typing import Any
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Path, Query, BackgroundTasks
 
 
@@ -25,7 +26,7 @@ async def get_parishioner_languages(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    parishioner_id: int
+    parishioner_id: UUID
 ) -> Any:
     """
     Get all languages spoken by a parishioner.
@@ -67,7 +68,7 @@ async def assign_languages_to_parishioner(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    parishioner_id: int,
+    parishioner_id: UUID,
     language_ids: LanguagesAssignRequest
 ) -> Any:
     """
@@ -140,7 +141,7 @@ async def remove_languages_from_parishioner(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    parishioner_id: int,
+    parishioner_id: UUID,
     language_ids: LanguagesAssignRequest
 ) -> Any:
     """
@@ -213,7 +214,7 @@ async def remove_language_from_parishioner(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    parishioner_id: int,
+    parishioner_id: UUID,
     language_id: int = Path(..., ge=1)
 ) -> Any:
     """

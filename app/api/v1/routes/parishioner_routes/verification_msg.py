@@ -1,4 +1,5 @@
 import uuid
+from uuid import UUID
 from typing import Any, List, Literal
 from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -21,7 +22,7 @@ verify_router = APIRouter()
 async def send_verification_message(
     *,
     session: SessionDep,
-    parishioner_id: int,
+    parishioner_id: UUID,
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
     channel: Literal["email", "sms", "both"] = "both",
@@ -251,7 +252,7 @@ async def confirm_verification(
     # Send confirmation SMS if the parishioner has a phone number
     if parishioner.mobile_number:
         background_tasks.add_task(
-            sms_service.send_record_verification_confirmation_sms,
+            sms_service.send_record_verification_confirmation_message,
             phone=parishioner.mobile_number,
             parishioner_name=parishioner_name
         )
@@ -273,12 +274,12 @@ async def confirm_verification(
 async def send_batch_verification_messages(
     *,
     session: SessionDep,
-    parishioner_ids: List[int],
+    parishioner_ids: List[UUID],
     background_tasks: BackgroundTasks,
     current_user: CurrentUser,
 ) -> Any:
     """
-    Send verification messages to multiple parishioners at once.
+    Send verification messages to multiple parishioners at once via email and SMS.
     """
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
@@ -326,13 +327,16 @@ async def send_batch_verification_messages(
     
     # Process each parishioner
     for parishioner in parishioners:
-        # Skip if no email
-        if not parishioner.email_address:
+        # Skip if no email or mobile number
+        has_email = bool(parishioner.email_address)
+        has_mobile = bool(parishioner.mobile_number)
+        
+        if not has_email and not has_mobile:
             results["skipped"] += 1
             results["details"].append({
                 "parishioner_id": parishioner.id,
                 "status": "skipped",
-                "reason": "No email address"
+                "reason": "No email address or mobile number available"
             })
             continue
         
@@ -379,22 +383,36 @@ async def send_batch_verification_messages(
         # Get parishioner name
         parishioner_name = f"{parishioner.first_name} {parishioner.last_name}"
         
-        # Send verification email in the background
-        background_tasks.add_task(
-            email_service.send_verification_message,
-            email=parishioner.email_address,
-            parishioner_name=parishioner_name,
-            verification_link=verification_link,
-            access_code=verification_data["access_code"]
-        )
+        # Send verification email in the background (if email exists)
+        if has_email:
+            background_tasks.add_task(
+                email_service.send_verification_message,
+                email=parishioner.email_address,
+                parishioner_name=parishioner_name,
+                verification_link=verification_link,
+                access_code=verification_data["access_code"]
+            )
+        
+        # Send verification SMS in the background (if mobile number exists)
+        if has_mobile:
+            background_tasks.add_task(
+                sms_service.send_verification_message,
+                phone=parishioner.mobile_number,
+                parishioner_name=parishioner_name,
+                verification_link=verification_link
+            )
         
         results["processed"] += 1
         results["details"].append({
             "parishioner_id": parishioner.id,
             "status": "sent",
-            "email": parishioner.email_address,
+            "email": parishioner.email_address if has_email else None,
+            "mobile": parishioner.mobile_number if has_mobile else None,
             "verification_link": verification_link,
-            "verification_status": parishioner.verification_status.value if hasattr(parishioner.verification_status, 'value') else str(parishioner.verification_status)
+            "verification_status": parishioner.verification_status.value if hasattr(parishioner.verification_status, 'value') else str(parishioner.verification_status),
+            "notification_methods": [
+                method for method, has_method in [("email", has_email), ("sms", has_mobile)] if has_method
+            ]
         })
     
     # Commit all the verification records at once
@@ -404,7 +422,6 @@ async def send_batch_verification_messages(
         message=f"Processed {results['processed']} verification messages, skipped {results['skipped']}",
         data=results
     )
-
 
 @verify_router.get("/check/{verification_id}", response_model=APIResponse)
 async def check_verification_status(

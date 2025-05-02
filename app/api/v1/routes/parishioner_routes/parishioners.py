@@ -66,7 +66,7 @@ async def create_parishioner(
 
         # send welcome sms
         background_tasks.add_task(
-            sms_service.send_welcome_message_on_create,
+            sms_service.send_parishioner_onboarding_welcome_message,
             phone=parishioner_in.mobile_number,
             parishioner_name=parishioner_in.first_name + " " + parishioner_in.last_name
         )
@@ -155,7 +155,7 @@ async def get_all_parishioners(
 # get detailed parishioner
 @router.get("/{parishioner_id}", response_model=APIResponse)
 async def get_detailed_parishioner(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -306,7 +306,7 @@ async def get_detailed_parishioner(
 async def update_parishioner(
     *,
     session: SessionDep,
-    parishioner_id: int,
+    parishioner_id: UUID,
     parishioner_in: ParishionerPartialUpdate,
     current_user: CurrentUser,
 ) -> Any:
@@ -422,7 +422,7 @@ async def update_parishioner(
 async def generate_church_id(
     *,
     session: SessionDep,
-    parishioner_id: int,
+    parishioner_id: UUID,
     old_church_id: str = Query(..., description="Old church ID to be incorporated into the new ID"),
     current_user: CurrentUser,
     send_email: bool = Query(False, description="Whether to send confirmation email to the parishioner"),
@@ -526,7 +526,7 @@ async def generate_church_id(
         
             parishioner_full_name = f"{parishioner.first_name} {parishioner.last_name}"
             background_tasks.add_task(
-                sms_service.send_ID_generation_confirmation,  
+                sms_service.send_church_id_generation_message,  
                 parishioner_name=parishioner_full_name,
                 phone=parishioner.mobile_number,
                 new_church_id=parishioner.new_church_id

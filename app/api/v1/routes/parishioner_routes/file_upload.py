@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -17,6 +18,63 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 file_upload_router = APIRouter()
+
+def is_valid_date_format(date_str: str) -> bool:
+    """
+    Check if date string is in a valid format (YYYY-MM-DD or DD/MM/YYYY)
+    
+    Args:
+        date_str: Date string to validate
+        
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    # Remove any whitespace
+    date_str = date_str.strip()
+    
+    # Check for ISO format (YYYY-MM-DD)
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        try:
+            datetime.strptime(date_str, '%Y-%m-%d')
+            return True
+        except ValueError:
+            return False
+    
+    # Check for DD/MM/YYYY format
+    if re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', date_str):
+        try:
+            datetime.strptime(date_str, '%d/%m/%Y')
+            return True
+        except ValueError:
+            return False
+    
+    return False
+
+def convert_date_format(date_str: str) -> str:
+    """
+    Convert date string to ISO format (YYYY-MM-DD)
+    
+    Args:
+        date_str: Date string to convert
+        
+    Returns:
+        str: Date in ISO format (YYYY-MM-DD)
+    """
+    date_str = date_str.strip()
+    
+    # Already in ISO format
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        return date_str
+    
+    # Convert from DD/MM/YYYY to YYYY-MM-DD
+    if re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', date_str):
+        try:
+            date_obj = datetime.strptime(date_str, '%d/%m/%Y')
+            return date_obj.strftime('%Y-%m-%d')
+        except ValueError:
+            return date_str
+    
+    return date_str
 
 def validate_csv_data(df: pd.DataFrame) -> Dict[str, Any]:
     """
@@ -51,10 +109,14 @@ def validate_csv_data(df: pd.DataFrame) -> Dict[str, Any]:
                 row_errors.append(f"Missing value for required field: {col}")
         
         # Validate date format (YYYY-MM-DD)
+        # if not pd.isna(row["Date of Birth"]):
+        #     dob = str(row["Date of Birth"]).strip()
+        #     if not re.match(r'^\d{4}-\d{2}-\d{2}$', dob):
+        #         row_errors.append(f"Invalid date format for Date of Birth: {dob}. Expected format: YYYY-MM-DD")
         if not pd.isna(row["Date of Birth"]):
             dob = str(row["Date of Birth"]).strip()
-            if not re.match(r'^\d{4}-\d{2}-\d{2}$', dob):
-                row_errors.append(f"Invalid date format for Date of Birth: {dob}. Expected format: YYYY-MM-DD")
+            if not is_valid_date_format(dob):
+                row_errors.append(f"Invalid date format for Date of Birth: {dob}. Expected format: YYYY-MM-DD or DD/MM/YYYY")
         
         # Validate gender
         if not pd.isna(row["Gender"]):
@@ -139,10 +201,16 @@ def preprocess_csv_data(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].apply(
                 lambda x: standardize_list_items(x) if not pd.isna(x) else x
             )
+
+    # Convert date formats to ISO format
+    if "Date of Birth" in df.columns:
+        df["Date of Birth"] = df["Date of Birth"].apply(
+            lambda x: convert_date_format(str(x)) if not pd.isna(x) else x
+        )
     
     return df
 
-@file_upload_router.post("/parishioners", status_code=status.HTTP_201_CREATED)
+@file_upload_router.post("/batch", status_code=status.HTTP_201_CREATED)
 async def upload_parishioners_csv(
     session: SessionDep,
     current_user: CurrentUser,
@@ -236,7 +304,10 @@ async def get_import_template():
     Get information about the expected file format for parishioner import.
     """
     return {
-        "required_columns": [
+        "success": True,
+        "message": "Templete fetched successfully",
+        "template": {
+            "required_columns": [
             "Last Name (Surname)", 
             "First Name",
             "Date of Birth",
@@ -274,13 +345,15 @@ async def get_import_template():
             "Unique ID ",
             "Place of Worship",
             "Current place of Residence/Area",
-            "Languages Spoken"
+            "Languages Spoken",
+            "Church Groups/Societies",
+            "Community"
         ],
         "format_rules": [
             "The file can be CSV or TSV format",
             "Date of Birth should be in format YYYY-MM-DD (e.g., 1990-05-20)",
             "Gender should be 'Male' or 'Female'",
-            "Multiple items should be separated by semicolons (;)",
+            "Multiple items should be separated by semicolons (;) or coma (,)",
             "Names will be converted to sentence case",
             "Required fields: Last Name, First Name, Date of Birth, Gender"
         ],
@@ -294,6 +367,7 @@ async def get_import_template():
                 "Skills/Talents": "Singing;Playing Piano;Teaching"
             }
         ]
+        }
     }
 
 

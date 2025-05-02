@@ -12,6 +12,6 @@ router = APIRouter()
 # file upload
 router.include_router(
 file_upload_router,
-prefix="/import",
-tags=["Uploads"]
+prefix="/parishioners",
+# tags=["Uploads Parishioner"]
 )

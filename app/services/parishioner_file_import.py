@@ -6,6 +6,7 @@ import re
 from typing import Dict, List, Any, Optional
 from difflib import get_close_matches
 
+from app.models.church_community import ChurchCommunity
 from app.models.language import Language
 from app.models.parishioner import (
     LifeStatus, Parishioner, Occupation, FamilyInfo, Child, 
@@ -456,7 +457,34 @@ class ParishionerImportService:
                     else:
                         # If it doesn't exist, log a warning
                         logger.warning(f"Place of worship '{place_name}' not found in database and no close match found")
+
+
+            # Handle church community - check if column exists
+            church_community_id = None
+            if "Community" in row and not pd.isna(row["Community"]):
+                community_name = self.clean_text(row["Community"])
+                if community_name:
+                    # Try to find the church community by exact name first
+                    church_community = self.db.query(ChurchCommunity).filter(
+                        ChurchCommunity.name == community_name
+                    ).first()
+                    
+                    # If not found, try fuzzy matching
+                    if not church_community:
+                        church_community = self.find_closest_match(community_name, ChurchCommunity)
+                    
+                    # If it exists, use its ID
+                    if church_community:
+                        church_community_id = church_community.id
+                        if church_community.name != community_name:
+                            logger.info(f"Found church community '{church_community.name}' as closest match for '{community_name}'")
+                    else:
+                        # If it doesn't exist, log a warning
+                        logger.warning(f"Church community '{community_name}' not found in database and no close match found")
                 
+            
+                
+            
             # Create Parishioner
             parishioner = Parishioner(
                 new_church_id=new_church_id,
@@ -478,7 +506,8 @@ class ParishionerImportService:
                 membership_status=MembershipStatus.ACTIVE,
                 verification_status=VerificationStatus.UNVERIFIED,
                 current_residence=self.clean_text(row.get("Current place of Residence/Area", "")),
-                place_of_worship_id=place_of_worship_id  # Use the ID instead of the string name
+                place_of_worship_id=place_of_worship_id , # Use the ID instead of the string name
+                church_community_id = church_community_id
             )
             
             self.db.add(parishioner)

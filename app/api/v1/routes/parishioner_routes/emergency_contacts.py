@@ -1,5 +1,6 @@
 import logging
 from typing import Any
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Depends, Path
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +20,7 @@ emergency_contacts_router = APIRouter()
 MAX_EMERGENCY_CONTACTS = 3
 
 # Helper function to get parishioner or raise 404
-def get_parishioner_or_404(session: Session, parishioner_id: int):
+def get_parishioner_or_404(session: Session, parishioner_id: UUID):
     parishioner = session.query(Parishioner).filter(
         Parishioner.id == parishioner_id
     ).first()
@@ -35,7 +36,7 @@ def get_parishioner_or_404(session: Session, parishioner_id: int):
 @emergency_contacts_router.post("/", response_model=APIResponse)
 async def create_emergency_contact(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     contact_in: EmergencyContactCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -101,7 +102,7 @@ async def create_emergency_contact(
 # Get all emergency contacts for a parishioner
 @emergency_contacts_router.get("/", response_model=APIResponse)
 async def get_emergency_contacts(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -122,7 +123,7 @@ async def get_emergency_contacts(
 # Get a specific emergency contact by ID
 @emergency_contacts_router.get("/{contact_id}", response_model=APIResponse)
 async def get_emergency_contact(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     contact_id: int = Path(..., title="The ID of the emergency contact to get"),
@@ -152,7 +153,7 @@ async def get_emergency_contact(
 @emergency_contacts_router.put("/{contact_id}", response_model=APIResponse)
 async def update_emergency_contact(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     contact_id: int = Path(..., title="The ID of the emergency contact to update"),
     contact_in: EmergencyContactUpdate,
     session: SessionDep,
@@ -212,7 +213,7 @@ async def update_emergency_contact(
 # Delete an emergency contact
 @emergency_contacts_router.delete("/{contact_id}", response_model=APIResponse)
 async def delete_emergency_contact(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     contact_id: int = Path(..., title="The ID of the emergency contact to delete"),
@@ -263,7 +264,7 @@ async def delete_emergency_contact(
 # Batch addd
 @emergency_contacts_router.post("/batch", response_model=APIResponse)
 async def batch_update_emergency_contacts(
-    parishioner_id: int,
+    parishioner_id: UUID,
     contacts: list[EmergencyContactCreate],
     session: SessionDep,
     current_user: CurrentUser,

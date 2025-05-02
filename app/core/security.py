@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
+from uuid import UUID
 from fastapi import HTTPException, status
 from jwt import api_jwt
 from passlib.context import CryptContext
@@ -17,9 +18,23 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
 
-def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
+def create_access_token(subject: str | UUID | Any, expires_delta: timedelta) -> str:
+    """
+    Create JWT access token with support for UUID objects
+    
+    Args:
+        subject: The subject for the token (user ID) - can be UUID, str or other
+        expires_delta: How long the token should be valid
+        
+    Returns:
+        str: The encoded JWT token
+    """
     expire = datetime.now(timezone.utc) + expires_delta
-    to_encode = {"exp": expire, "sub": str(subject)}
+    
+    # Ensure UUID is converted to string if that's what was passed
+    subject_str = str(subject)
+    
+    to_encode = {"exp": expire, "sub": subject_str}
     encoded_jwt = api_jwt.encode(payload=to_encode, key=settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
