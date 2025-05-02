@@ -16,6 +16,7 @@ class SMSService:
         self.base_url = "https://sms.arkesel.com/api/v2/sms/send"
         self.headers = {
             "api-key": settings.ARKESEL_API_KEY,
+            # "api-key": "T0ZVY1ZXeEh0UWRKQUpRR21Sako",
             "Content-Type": "application/json"
         }
         self.client = requests.Session()
@@ -26,43 +27,30 @@ class SMSService:
     def _initialize_templates(self) -> Dict[str, SMSTemplate]:
         """Initialize SMS templates."""
         return {
-            # welcome message; when parishioners are created, same as for new users
-            "main_welcome_message": SMSTemplate(
-                name="Welcome Message",
-                content="Hi {parishioner_name}, Welcome to {church_name}! We're blessed to have you join our community. For any inquiries, please contact us at {church_contact}."
+            "verification": SMSTemplate(
+                name="verification",
+                content="Dear {parishioner_name}, please verify your information using this link: {verification_link}. Your access code is your date of birth in the format DDMMYYYY. Please note that the link expires in 48hrs. God bless you."
             ),
-
-            # church Id generation message
-            "church_id_generation_message": SMSTemplate(
-                name="New Church ID Generation Message",
-                content="Hi {parishioner_name}, your new church ID : {new_church_id} has been generated successfully. Please keep this information for your records. Thank you!"
+            "welcome": SMSTemplate(
+                name="welcome",
+                content="Welcome to {church_name}, {parishioner_name}! We're blessed to have you join our community. For any inquiries, please contact us at {church_contact}."
             ),
-
-            # Parishioner onboarding welcome
-            "parishioner_onboarding_welcome_message": SMSTemplate(
-                name="Parishioner Onboarding Message",
+            "welcome_create": SMSTemplate(
+                name="welcome",
                 content="Dear {parishioner_name}, welcome to {church_name}! Your church records are being created. We will update you once the process is done. For any inquiries, please contact us at {church_contact}."
             ),
-
-            # Parishion record verification message
-            "record_verification_message": SMSTemplate(
-                name="Parishioner Record Verification",
-                content="Hi {parishioner_name}, please verify your information using this link: {verification_link}. Your access code is your date of birth in the format DDMMYYYY. Please note that the link expires in 48hrs. Thank you."
-            ),
-
-            # confirm record verification message
-            "record_verification_confirmation_message": SMSTemplate(
-                name="Parishioner Record Verification Confirmation",
-                content="Hi {parishioner_name}, thank you for verifying your church records. Your information has been successfully confirmed in our system. Thank you!"
-            ),
-
-            # event
             "event_reminder": SMSTemplate(
                 name="event_reminder",
                 content="Dear {parishioner_name}, this is a reminder about {event_name} on {event_date} at {event_time}. We look forward to seeing you there."
             ),
-            
-           
+            "id_generation_confirmation": SMSTemplate(
+                name="id_generation_confirmation",
+                content="Hi {parishioner_name}, your new church ID : {new_church_id} has been generated successfully. Please keep this information for your records. Thank you!"
+            ),
+             "record_verification_confirmation_sms": SMSTemplate(
+                name="record_verification_confirmation_sms",
+                content="Hi {parishioner_name}, thank you for verifying your church records. Your information has been successfully confirmed in our system. Thank you!"
+            )
         }
     
     def format_phone_number(self, phone: str) -> str:
@@ -99,7 +87,7 @@ class SMSService:
 
         # Prepare payload
         payload = {
-            "sender": sender_name or settings.SMS_SENDER_NAME,
+            "sender":  settings.SMS_SENDER_NAME,
             "message": message,
             "recipients": formatted_numbers
         }
@@ -112,7 +100,7 @@ class SMSService:
         try:
             response = self.client.post(self.base_url, headers=self.headers, json=payload)
             response.raise_for_status()
-            logger.info("SMS Response", response.json())
+            logger.info("res", response.json())
             return {
                 "success": True, 
                 "data": response.json(),
@@ -145,14 +133,6 @@ class SMSService:
             return self.send_sms(phone_numbers, message, sender_name)
         except KeyError as e:
             return {"success": False, "message": f"Missing context variable: {str(e)}"}
-        
-    # Helper method to create standard context
-    def _create_base_context(self, parishioner_name: str) -> Dict[str, str]:
-        return {
-            "parishioner_name": parishioner_name,
-            "church_name": settings.CHURCH_NAME,
-            "church_contact": settings.CHURCH_CONTACT
-        }
     
     def send_verification_message(self,
                                  phone: str,
@@ -160,51 +140,54 @@ class SMSService:
                                  verification_link: str,
                                  access_code: str = "") -> Dict[str, Any]:
         """Send verification SMS to a parishioner."""
-        context = self._create_base_context(parishioner_name)
-        context["verification_link"] = verification_link
-        context["access_code"] = access_code
-        return self.send_from_template("record_verification_message", [phone], context)
+        context = {
+            "parishioner_name": parishioner_name,
+            "verification_link": verification_link,
+            "access_code": access_code
+        }
+        return self.send_from_template("verification", [phone], context)
     
-    def send_main_welcome_message(self,
+    def send_welcome_message(self,
                             phone: str,
                             parishioner_name: str) -> Dict[str, Any]:
         """Send welcome SMS to a new parishioner."""
-        context = self._create_base_context(parishioner_name)
-        return self.send_from_template("main_welcome_message", [phone], context)
+        context = {
+            "parishioner_name": parishioner_name,
+            "church_name": settings.CHURCH_NAME,
+            "church_contact": settings.CHURCH_CONTACT
+        }
+        return self.send_from_template("welcome", [phone], context)
     
 
-    def send_parishioner_onboarding_welcome_message(self,
+    def send_welcome_message_on_create(self,
                             phone: str,
                             parishioner_name: str) -> Dict[str, Any]:
         """Send welcome SMS to a new parishioner."""
-        context = self._create_base_context(parishioner_name)
-        return self.send_from_template("parishioner_onboarding_welcome_message", [phone], context)
+        context = {
+            "parishioner_name": parishioner_name,
+            "church_name": settings.CHURCH_NAME,
+            "church_contact": settings.CHURCH_CONTACT
+        }
+        return self.send_from_template("welcome_create", [phone], context)
     
-    def send_church_id_generation_message(self,
+    def send_ID_generation_confirmation(self,
                                          parishioner_name: str,
                                          phone: str,
                                          new_church_id: str
 
                                         ) -> Dict[str, Any]:
-        """Send church id generation SMS to a parishioner."""
-        context = self._create_base_context(parishioner_name)
-        context["new_church_id"] = new_church_id
-        return self.send_from_template("church_id_generation_message", [phone], context)
+        context = {
+            "parishioner_name": parishioner_name,
+            "new_church_id": new_church_id,
+            "church_contact": settings.CHURCH_CONTACT
+        }
+        return self.send_from_template("id_generation_confirmation", [phone], context)
     
-    def send_record_verification_confirmation_message(self, parishioner_name: str, phone: str,) -> Dict[str, Any]:
-        context = self._create_base_context(parishioner_name)
-        return self.send_from_template("record_verification_confirmation_message",[phone], context)
-    
-    def send_event_reminder(self, phone: str, parishioner_name: str, 
-                          event_name: str, event_date: str, 
-                          event_time: str) -> Dict[str, Any]:
-        context = self._create_base_context(parishioner_name)
-        context.update({
-            "event_name": event_name,
-            "event_date": event_date,
-            "event_time": event_time
-        })
-        return self.send_from_template("event_reminder", [phone], context)
+    def send_record_verification_confirmation_sms(self, parishioner_name: str, phone: str,) -> Dict[str, Any]:
+        context = {
+            "parishioner_name": parishioner_name,
+        }
+        return self.send_from_template("record_verification_confirmation_sms",[phone], context)
          
 
 # Create a singleton instance

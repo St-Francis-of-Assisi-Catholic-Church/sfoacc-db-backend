@@ -66,7 +66,7 @@ async def create_parishioner(
 
         # send welcome sms
         background_tasks.add_task(
-            sms_service.send_welcome_message_on_create,
+            sms_service.send_parishioner_onboarding_welcome_message,
             phone=parishioner_in.mobile_number,
             parishioner_name=parishioner_in.first_name + " " + parishioner_in.last_name
         )
@@ -526,7 +526,7 @@ async def generate_church_id(
         
             parishioner_full_name = f"{parishioner.first_name} {parishioner.last_name}"
             background_tasks.add_task(
-                sms_service.send_ID_generation_confirmation,  
+                sms_service.send_church_id_generation_message,  
                 parishioner_name=parishioner_full_name,
                 phone=parishioner.mobile_number,
                 new_church_id=parishioner.new_church_id
