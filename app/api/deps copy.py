@@ -1,24 +1,26 @@
 from collections.abc import Generator
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 # from jose import JWTError, jwt # type: ignore
 
-from jwt import ExpiredSignatureError, InvalidTokenError, api_jwt
+from jwt import api_jwt
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import ALGORITHM
 from app.core.database import db
-from app.models.user import User as UserModel, UserStatus
+from app.models.user import User as UserModel, UserRole, UserStatus
+
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
 
 
 class TokenPayload(BaseModel):
-    sub: str | None = None
+    sub: Optional[str] = None
 
 # OAuth2 scheme setup
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -44,18 +46,19 @@ def check_user_status(user: UserModel) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+    user_status = str(user.status)
     
-    if user.status == UserStatus.DISABLED:
+    if user_status == UserStatus.DISABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been disabled. Please contact support for assistance."
         )
-    elif user.status == UserStatus.RESET_REQUIRED:
+    elif user_status == UserStatus.RESET_REQUIRED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Password reset required. Please reset your password before continuing."
         )
-    elif user.status != UserStatus.ACTIVE:
+    elif user_status != UserStatus.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account is not active. Please verify your account or contact support."
@@ -128,7 +131,8 @@ def get_current_active_superuser(
     """
     Verify the current user has superadmin privileges
     """
-    if not current_user.role == "super_admin":
+    current_user_role = str(current_user.role)
+    if current_user_role != UserRole.SUPER_ADMIN:
          raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient privileges. This action requires super admin access."
