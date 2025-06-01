@@ -7,10 +7,6 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 
-# Default environment
-ENV=${2:-prod}
-
-
 get_domain() {
     if [ -f .env ]; then
         DOMAIN=$(grep DOMAIN .env | cut -d '=' -f2)
@@ -29,16 +25,11 @@ show_service_info() {
     
     # Show URLs
     echo -e "\n${GREEN}Available URLs:${NC}"
-    echo -e "API:       ${YELLOW}http://${DOMAIN}:8000${NC}"
+    echo -e "API:        ${YELLOW}http://${DOMAIN}:8000${NC}"
     echo -e "           ${YELLOW}https://${DOMAIN}:8000${NC}"
-    
-    # Show Adminer URLs only in local mode
-    if [ "$ENV" == "local" ]; then
-        echo -e "Adminer:   ${YELLOW}http://${DOMAIN}:8080${NC}"
-        echo -e "           ${YELLOW}https://${DOMAIN}:8080${NC}"
-    fi
-    
-    echo -e "Health:    ${YELLOW}http://${DOMAIN}:8081${NC}"
+    echo -e "Adminer:    ${YELLOW}http://${DOMAIN}:8080${NC}"
+    echo -e "           ${YELLOW}https://${DOMAIN}:8080${NC}"
+    echo -e "DB Info:    ${YELLOW}http://${DOMAIN}:8081${NC}"
     echo -e "           ${YELLOW}https://${DOMAIN}:8081${NC}"
 }
 
@@ -79,56 +70,25 @@ print('Database connection successful')
 
 # Function to run server
 run_server() {
-    # echo -e "${GREEN}Starting Docker containers...${NC}"
-    # docker compose up
-    if [ "$ENV" == "local" ]; then
-        echo -e "${GREEN}Starting Docker containers in LOCAL mode...${NC}"
-        export ENVIRONMENT=local
-        docker compose --profile local up
-    else
-        echo -e "${GREEN}Starting Docker containers in PRODUCTION mode...${NC}"
-        export ENVIRONMENT=prod
-        docker compose up
-    fi
+    echo -e "${GREEN}Starting Docker containers...${NC}"
+    docker compose up
 }
 
 # Function to build containers
 build() {
-    # echo -e "${GREEN}Building Docker containers...${NC}"
+    echo -e "${GREEN}Building Docker containers...${NC}"
      # Note: Using 'docker compose down' instead of 'docker compose down -v'
     # to preserve the database volume during rebuilds
     # docker compose down -v
-    # docker compose down 
-    # docker compose down --remove-orphans
-    # docker compose build --no-cache
-    if [ "$ENV" == "local" ]; then
-        echo -e "${GREEN}Building Docker containers for LOCAL development...${NC}"
-        export ENVIRONMENT=local
-        docker compose --profile local down 
-        docker compose --profile local down --remove-orphans
-        docker compose --profile local build --no-cache
-    else
-        echo -e "${GREEN}Building Docker containers for PRODUCTION...${NC}"
-        export ENVIRONMENT=prod
-        docker compose down 
-        docker compose down --remove-orphans
-        docker compose build --no-cache
-    fi
+    docker compose down 
+    docker compose down --remove-orphans
+    docker compose build --no-cache
 }
 
 # Function to start services
 start_services() {
-    # echo -e "${GREEN}Starting Docker services in detached mode...${NC}"
-    # docker compose up -d
-    if [ "$ENV" == "local" ]; then
-        echo -e "${GREEN}Starting Docker services in LOCAL mode (detached)...${NC}"
-        export ENVIRONMENT=local
-        docker compose --profile local up -d
-    else
-        echo -e "${GREEN}Starting Docker services in PRODUCTION mode (detached)...${NC}"
-        export ENVIRONMENT=prod
-        docker compose up -d
-    fi
+    echo -e "${GREEN}Starting Docker services in detached mode...${NC}"
+    docker compose up -d
     
     # Wait a moment for services to initialize
     echo -e "${YELLOW}Waiting for services to initialize...${NC}"
@@ -159,12 +119,7 @@ generate_ssl() {
 
 # Function to setup project
 setup_project() {
-    # echo -e "${GREEN}Setting up project...${NC}"
-    if [ "$ENV" == "local" ]; then
-        echo -e "${GREEN}Setting up project in LOCAL mode...${NC}"
-    else
-        echo -e "${GREEN}Setting up project in PRODUCTION mode...${NC}"
-    fi
+    echo -e "${GREEN}Setting up project...${NC}"
     
     # Create necessary directories
     mkdir -p nginx/conf.d nginx/logs
@@ -186,23 +141,18 @@ setup_project() {
 # Function to show help
 show_help() {
     echo -e "  ${GREEN}Available commands:${NC}"
-    echo -e "  ${YELLOW}setup [env]${NC}           - Initial project setup (directories, SSL, build)"
-    echo -e "  ${YELLOW}seed${NC}                  - Seed church data"
-    echo -e "  ${YELLOW}ssl${NC}                   - Generate SSL certificates"
-    echo -e "  ${YELLOW}initdb${NC}                - Initialize db"
-    echo -e "  ${YELLOW}createsuperuser${NC}       - Create a superuser account"
-    echo -e "  ${YELLOW}checkdb${NC}               - Check database connection"
-    echo -e "  ${YELLOW}runserver [env]${NC}       - Run Docker containers (attached mode)"
-    echo -e "  ${YELLOW}start [env]${NC}           - Start services in detached mode"
-    echo -e "  ${YELLOW}build [env]${NC}           - Build Docker containers"
-    echo -e "  ${YELLOW}shell${NC}                 - Open Python shell in api container"
-    echo -e "  ${YELLOW}bash${NC}                  - Open Container's bash shell in api"
-    echo -e "  ${YELLOW}help${NC}                  - Show this help message"
-    echo -e ""
-    echo -e "  ${GREEN}Environment flag [env]:${NC}"
-    echo -e "  ${YELLOW}local${NC}                 - Run in local development mode with database and adminer"
-    echo -e "  ${YELLOW}prod${NC}                  - Run in production mode (default if no env is specified)"
-    echo -e "  ${YELLOW}Examples:${NC} './start.sh build local' or './start.sh runserver'"
+    echo -e "  ${YELLOW}setup${NC}           - Initial project setup (directories, SSL, build)"
+    echo -e "  ${YELLOW}seed${NC}             - Seed church data"
+    echo -e "  ${YELLOW}ssl${NC}             - Generate SSL certificates"
+    echo -e "  ${YELLOW}initdb${NC}             - Initiative db"
+    echo -e "  ${YELLOW}createsuperuser${NC}  - Create a superuser account"
+    echo -e "  ${YELLOW}checkdb${NC}         - Check database connection"
+    echo -e "  ${YELLOW}runserver${NC}       - Run Docker containers (attached mode)"
+    echo -e "  ${YELLOW}start${NC}           - Start services in detached mode"
+    echo -e "  ${YELLOW}build${NC}           - Build Docker containers"
+    echo -e "  ${YELLOW}shell${NC}           - Open Python shell in api container"
+    echo -e "  ${YELLOW}bash${NC}            - Open Container's bash shell in api"
+    echo -e "  ${YELLOW}help${NC}            - Show this help message"
 }
 
 # Main script
