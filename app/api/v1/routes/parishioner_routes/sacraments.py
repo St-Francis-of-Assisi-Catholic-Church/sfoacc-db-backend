@@ -1,5 +1,6 @@
 import logging
 from typing import Any, List
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Path as FastAPIPath
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +20,7 @@ sacraments_router = APIRouter()
 
 
 # Helper function to get parishioner or raise 404
-def get_parishioner_or_404(session: Session, parishioner_id: int):
+def get_parishioner_or_404(session: Session, parishioner_id: UUID):
     parishioner = session.query(Parishioner).filter(
         Parishioner.id == parishioner_id
     ).first()
@@ -61,7 +62,7 @@ def get_sacrament_by_type_or_id(session: Session, sacrament_identifier):
 # Helper endpoint to check which sacraments a parishioner has received
 @sacraments_router.get("/summary", response_model=APIResponse)
 async def get_sacrament_summary(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -100,7 +101,7 @@ async def get_sacrament_summary(
 @sacraments_router.post("/", response_model=APIResponse)
 async def add_sacrament(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     sacrament_in: ParSacramentCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -196,7 +197,7 @@ async def add_sacrament(
 # Get all sacrament records for a parishioner
 @sacraments_router.get("/", response_model=APIResponse)
 async def get_sacraments(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -217,7 +218,7 @@ async def get_sacraments(
 # Get all records for a specific sacrament type
 @sacraments_router.get("/type/{sacrament_type}", response_model=APIResponse)
 async def get_sacrament_records_by_type(
-    parishioner_id: int,
+    parishioner_id: UUID,
     sacrament_type: SacramentType,
     session: SessionDep,
     current_user: CurrentUser,
@@ -256,7 +257,7 @@ async def get_sacrament_records_by_type(
 # Get a specific sacrament record by ID
 @sacraments_router.get("/{sacrament_record_id}", response_model=APIResponse)
 async def get_sacrament_record(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     sacrament_record_id: int = FastAPIPath(..., title="The ID of the sacrament record to get"),
@@ -288,7 +289,7 @@ async def get_sacrament_record(
 @sacraments_router.put("/{sacrament_record_id}", response_model=APIResponse)
 async def update_sacrament_record(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     sacrament_record_id: int = FastAPIPath(..., title="The ID of the sacrament record to update"),
@@ -391,7 +392,7 @@ async def update_sacrament_record(
 # Delete a sacrament record
 @sacraments_router.delete("/{sacrament_record_id}", response_model=APIResponse)
 async def delete_sacrament_record(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     sacrament_record_id: int = FastAPIPath(..., title="The ID of the sacrament record to delete"),
@@ -448,7 +449,7 @@ async def delete_sacrament_record(
 # Delete all records for a specific sacrament type
 @sacraments_router.delete("/type/{sacrament_type}", response_model=APIResponse)
 async def delete_sacrament_records_by_type(
-    parishioner_id: int,
+    parishioner_id: UUID,
     sacrament_type: SacramentType,
     session: SessionDep,
     current_user: CurrentUser,
@@ -512,7 +513,7 @@ async def delete_sacrament_records_by_type(
 # Batch update sacraments
 @sacraments_router.post("/batch", response_model=APIResponse)
 async def batch_update_sacraments(
-    parishioner_id: int,
+    parishioner_id: UUID,
     batch_data: List[ParSacramentCreate],
     session: SessionDep,
     current_user: CurrentUser,

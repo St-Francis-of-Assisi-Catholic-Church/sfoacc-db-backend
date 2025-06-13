@@ -1,5 +1,6 @@
 import logging
 from typing import Any, List
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Path as FastAPIPath
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -19,7 +20,7 @@ medical_conditions_router = APIRouter()
 MAX_MEDICAL_CONDITIONS = 5
 
 # Helper function to get parishioner or raise 404
-def get_parishioner_or_404(session: Session, parishioner_id: int):
+def get_parishioner_or_404(session: Session, parishioner_id: UUID):
     parishioner = session.query(Parishioner).filter(
         Parishioner.id == parishioner_id
     ).first()
@@ -35,7 +36,7 @@ def get_parishioner_or_404(session: Session, parishioner_id: int):
 @medical_conditions_router.post("/", response_model=APIResponse)
 async def create_medical_condition(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     condition_in: MedicalConditionCreate,
     session: SessionDep,
     current_user: CurrentUser,
@@ -99,7 +100,7 @@ async def create_medical_condition(
 # Get all medical conditions for a parishioner
 @medical_conditions_router.get("/", response_model=APIResponse)
 async def get_medical_conditions(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
@@ -120,7 +121,7 @@ async def get_medical_conditions(
 # Get a specific medical condition by ID
 @medical_conditions_router.get("/{condition_id}", response_model=APIResponse)
 async def get_medical_condition(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     condition_id: int = FastAPIPath(..., title="The ID of the medical condition to get"),
@@ -150,7 +151,7 @@ async def get_medical_condition(
 @medical_conditions_router.put("/{condition_id}", response_model=APIResponse)
 async def update_medical_condition(
     *,
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     condition_id: int = FastAPIPath(..., title="The ID of the medical condition to update"),
@@ -210,7 +211,7 @@ async def update_medical_condition(
 # Delete a medical condition
 @medical_conditions_router.delete("/{condition_id}", response_model=APIResponse)
 async def delete_medical_condition(
-    parishioner_id: int,
+    parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
     condition_id: int = FastAPIPath(..., title="The ID of the medical condition to delete"),
@@ -260,7 +261,7 @@ async def delete_medical_condition(
 # Add the following endpoint to the medical_conditions_router
 @medical_conditions_router.post("/batch", response_model=APIResponse)
 async def batch_update_medical_conditions(
-    parishioner_id: int,
+    parishioner_id: UUID,
     batch_data: List[MedicalConditionCreate],
     session: SessionDep,
     current_user: CurrentUser,

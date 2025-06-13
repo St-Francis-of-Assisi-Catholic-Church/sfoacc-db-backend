@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Enum, func, text, event
+import uuid
+from sqlalchemy import UUID, Boolean, Column, DateTime, Integer, String, Enum, func, text, event
 import enum
 from app.core.database import Base
 
@@ -16,7 +17,7 @@ class UserStatus(str, enum.Enum):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)

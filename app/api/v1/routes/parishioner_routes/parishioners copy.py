@@ -91,8 +91,7 @@ async def create_parishioner(
             detail=str(e)
         )
 
-
-# Get all parishioners with filters
+# Get all parishioners
 @router.get("/all", response_model=APIResponse)
 async def get_all_parishioners(
     *,
@@ -101,36 +100,18 @@ async def get_all_parishioners(
     skip: int = Query(0, ge=0),
     limit: int = Query(1000, ge=1, le=1000),
     search: Optional[str] = None,
-    # Filter parameters
+    #filter parameters
     society_id: Optional[int] = Query(None, description="Filter by society ID"),
     church_community_id: Optional[int] = Query(None, description="Filter by church community ID"),
     place_of_worship_id: Optional[int] = Query(None, description="Filter by place of worship ID"),
     gender: Optional[str] = Query(None, description="Filter by gender"),
-    marital_status: Optional[str] = Query(None, description="Filter by marital status"),
     birth_day_name: Optional[str] = Query(None, description="Filter by day of the week of birth (Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday)"),
     birth_month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month of birth (1-12)"),
+    marital_status: Optional[str] = Query(None, description="Filter by marital status"),
     membership_status: Optional[str] = Query(None, description="Filter by membership status"),
-    verification_status: Optional[str] = Query(None, description="Filter by verification status"),
-    has_old_church_id: Optional[bool] = Query(None, description="Filter by presence of old church ID (true=has ID, false=no ID)"),
-    has_new_church_id: Optional[bool] = Query(None, description="Filter by presence of new church ID (true=has ID, false=no ID)")
+    verification_status: Optional[str] = Query(None, description="Filter by verification status")
 ) -> Any:
-    """
-    Get list of all parishioners with pagination and filtering options.
-    
-    Available filters:
-    - search: Search by parishioner ID, church IDs, or any name
-    - society_id: Filter by society membership
-    - church_community_id: Filter by church community
-    - place_of_worship_id: Filter by place of worship
-    - gender: Filter by gender
-    - marital_status: Filter by marital status
-    - birth_day_name: Filter by day of the week of birth (Sunday, Monday, etc.)
-    - birth_month: Filter by month of birth (1-12)
-    - membership_status: Filter by membership status
-    - verification_status: Filter by verification status
-    - has_old_church_id: Filter by presence of old church ID (true=has ID, false=no ID)
-    - has_new_church_id: Filter by presence of new church ID (true=has ID, false=no ID)
-    """
+    """Get list of all parishioners with pagination with an optional search by parishioner id, church ids, or any name"""
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -157,19 +138,19 @@ async def get_all_parishioners(
                 ParishionerModel.maiden_name.ilike(search_term)
             )
         )
-    
-    # Apply society filter
+
+    # apply society filter
     if society_id is not None:
-        # Join with society_members table to filter by society
+    # Join with society_members table to filter by society
         from app.models.society import society_members
         query = query.join(
             society_members,
             ParishionerModel.id == society_members.c.parishioner_id
         ).filter(
             society_members.c.society_id == society_id
-        )
-    
-    # Apply church community filter
+    )
+        
+        # Apply church community filter
     if church_community_id is not None:
         query = query.filter(ParishionerModel.church_community_id == church_community_id)
     
@@ -179,172 +160,29 @@ async def get_all_parishioners(
     
     # Apply gender filter
     if gender is not None:
-        # Normalize input and match against enum values
-        gender_lower = gender.strip().lower()
-        gender_mapping = {
-            'male': 'male',
-            'female': 'female', 
-            'other': 'other',
-            # Handle common variations
-            'man': 'male',
-            'woman': 'female',
-            'boy': 'male',
-            'girl': 'female',
-            'm': 'male',
-            'f': 'female'
-        }
-        
-        if gender_lower in gender_mapping:
-            query = query.filter(ParishionerModel.gender == gender_mapping[gender_lower])
-        else:
-            # If no exact match, return no results rather than partial matches
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid gender value. Use: male, female, other (or common variations like man, woman, m, f)"
-            )
+        query = query.filter(ParishionerModel.gender.ilike(f"%{gender}%"))
     
     # Apply marital status filter
     if marital_status is not None:
-        # Normalize input and match against enum values
-        marital_lower = marital_status.strip().lower()
-        marital_mapping = {
-            'single': 'single',
-            'married': 'married',
-            'widowed': 'widowed',
-            'divorced': 'divorced',
-            'separated': 'separated',
-            # Handle common variations
-            'unmarried': 'single',
-            'wed': 'married',
-            'widow': 'widowed',
-            'widower': 'widowed'
-        }
-        
-        if marital_lower in marital_mapping:
-            query = query.filter(ParishionerModel.marital_status == marital_mapping[marital_lower])
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid marital status. Use: single, married, widowed, divorced, separated (or common variations)"
-            )
+        query = query.filter(ParishionerModel.marital_status.ilike(f"%{marital_status}%"))
     
-    # Apply birth day name filter (day of the week)
-    if birth_day_name is not None:
-        # Normalize the day name input
-        day_name = birth_day_name.strip().lower()
-        
-        # Map day names to numbers (Sunday = 0, Monday = 1, ..., Saturday = 6)
-        day_mapping = {
-            'sunday': 0, 'sun': 0,
-            'monday': 1, 'mon': 1,
-            'tuesday': 2, 'tue': 2, 'tues': 2,
-            'wednesday': 3, 'wed': 3,
-            'thursday': 4, 'thu': 4, 'thur': 4, 'thurs': 4,
-            'friday': 5, 'fri': 5,
-            'saturday': 6, 'sat': 6
-        }
-        
-        if day_name in day_mapping:
-            day_number = day_mapping[day_name]
-            # Use database-specific day of week extraction
-            # PostgreSQL: extract('dow') returns 0=Sunday, 1=Monday, ..., 6=Saturday
-            # MySQL: dayofweek() returns 1=Sunday, 2=Monday, ..., 7=Saturday
-            # SQLite: strftime('%w') returns 0=Sunday, 1=Monday, ..., 6=Saturday
-            
-            # For PostgreSQL and SQLite (most common with FastAPI)
-            query = query.filter(func.extract('dow', ParishionerModel.date_of_birth) == day_number)
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid day name. Use: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday (or abbreviated forms)"
-            )
+    # # Apply birth day filter
+    # if birth_day is not None:
+    #     query = query.filter(func.extract('day', ParishionerModel.date_of_birth) == birth_day)
     
-    # Apply birth month filter
-    if birth_month is not None:
-        query = query.filter(func.extract('month', ParishionerModel.date_of_birth) == birth_month)
+    # # Apply birth month filter
+    # if birth_month is not None:
+    #     query = query.filter(func.extract('month', ParishionerModel.date_of_birth) == birth_month)
     
     # Apply membership status filter
     if membership_status is not None:
-        # Normalize input and match against enum values
-        membership_lower = membership_status.strip().lower()
-        membership_mapping = {
-            'active': 'active',
-            'deceased': 'deceased',
-            'disabled': 'disabled',
-            # Handle common variations
-            'alive': 'active',
-            'dead': 'deceased',
-            'inactive': 'disabled'
-        }
-        
-        if membership_lower in membership_mapping:
-            query = query.filter(ParishionerModel.membership_status == membership_mapping[membership_lower])
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid membership status. Use: active, deceased, disabled (or variations like alive, dead, inactive)"
-            )
+        query = query.filter(ParishionerModel.membership_status.ilike(f"%{membership_status}%"))
     
     # Apply verification status filter
     if verification_status is not None:
-        # Normalize input and match against enum values
-        verification_lower = verification_status.strip().lower()
-        verification_mapping = {
-            'unverified': 'unverified',
-            'verified': 'verified',
-            'pending': 'pending',
-            # Handle common variations
-            'not verified': 'unverified',
-            'not_verified': 'unverified',
-            'confirm': 'verified',
-            'confirmed': 'verified',
-            'waiting': 'pending'
-        }
-        
-        if verification_lower in verification_mapping:
-            query = query.filter(ParishionerModel.verification_status == verification_mapping[verification_lower])
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid verification status. Use: unverified, verified, pending (or variations)"
-            )
-        
-
-    # Apply old church ID presence filter
-    if has_old_church_id is not None:
-        if has_old_church_id:
-            # Filter for parishioners who have an old church ID (not null and not empty)
-            query = query.filter(
-                ParishionerModel.old_church_id.isnot(None),
-                ParishionerModel.old_church_id != ''
-            )
-        else:
-            # Filter for parishioners who don't have an old church ID (null or empty)
-            query = query.filter(
-                or_(
-                    ParishionerModel.old_church_id.is_(None),
-                    ParishionerModel.old_church_id == ''
-                )
-            )
-
-    # Apply new church ID presence filter
-    if has_new_church_id is not None:
-        if has_new_church_id:
-            # Filter for parishioners who have a new church ID (not null and not empty)
-            query = query.filter(
-                ParishionerModel.new_church_id.isnot(None),
-                ParishionerModel.new_church_id != ''
-            )
-        else:
-            # Filter for parishioners who don't have a new church ID (null or empty)
-            query = query.filter(
-                or_(
-                    ParishionerModel.new_church_id.is_(None),
-                    ParishionerModel.new_church_id == ''
-                )
-            )
+        query = query.filter(ParishionerModel.verification_status.ilike(f"%{verification_status}%"))
     
-    # Get total count with all filters applied
+    # Get total count with search filter applied
     total_count = query.count()
     
     # Apply pagination
@@ -356,41 +194,13 @@ async def get_all_parishioners(
         for parishioner in parishioners
     ]
     
-    # Build filter summary for response
-    applied_filters = {}
-    if search:
-        applied_filters["search"] = search
-    if society_id is not None:
-        applied_filters["society_id"] = society_id
-    if church_community_id is not None:
-        applied_filters["church_community_id"] = church_community_id
-    if place_of_worship_id is not None:
-        applied_filters["place_of_worship_id"] = place_of_worship_id
-    if gender is not None:
-        applied_filters["gender"] = gender
-    if marital_status is not None:
-        applied_filters["marital_status"] = marital_status
-    if birth_day_name is not None:
-        applied_filters["birth_day_name"] = birth_day_name
-    if birth_month is not None:
-        applied_filters["birth_month"] = birth_month
-    if membership_status is not None:
-        applied_filters["membership_status"] = membership_status
-    if verification_status is not None:
-        applied_filters["verification_status"] = verification_status
-    if has_old_church_id is not None:
-        applied_filters["has_old_church_id"] = has_old_church_id
-    if has_new_church_id is not None:
-        applied_filters["has_new_church_id"] = has_new_church_id
-    
     return APIResponse(
         message=f"Retrieved {len(parishioners_data)} parishioners",
         data={
             "total": total_count,
             "parishioners": parishioners_data,
             "skip": skip,
-            "limit": limit,
-            "filters_applied": applied_filters
+            "limit": limit
         }
     )
 

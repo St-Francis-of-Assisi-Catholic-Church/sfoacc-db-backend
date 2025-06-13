@@ -7,6 +7,7 @@ from app.api.v1.routes import church_community
 from app.api.v1.routes import place_of_worship
 from app.api.v1.routes import languages
 from app.api.v1.routes import uploads
+from app.api.v1.routes.messaging import bulk_message
 
 
 api_router = APIRouter()
@@ -23,7 +24,9 @@ api_router.include_router(parishioners.router, prefix="/parishioners", tags=['pa
 api_router.include_router(society.router, prefix="/societies", tags=["societies"])
 api_router.include_router(statistics.router, prefix="/statistics", tags=["statistics"])
 
-api_router.include_router(uploads.router,  prefix="/uploads", tags=["uploads"] )
+api_router.include_router(uploads.router,  prefix="/uploads", tags=["Uploads"] )
+
+api_router.include_router(bulk_message.router, prefix="/bulk-message", tags=["Bulk Messaging"])
 
 
 

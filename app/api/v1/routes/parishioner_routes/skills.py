@@ -1,5 +1,6 @@
 import logging
 from typing import List, Any
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Path, Query
 from sqlalchemy.exc import IntegrityError
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 skills_router = APIRouter()
 
 # Helper function to get parishioner or raise 404
-def get_parishioner_or_404(session: SessionDep, parishioner_id: int):
+def get_parishioner_or_404(session: SessionDep, parishioner_id: UUID):
     parishioner = session.query(Parishioner).filter(
         Parishioner.id == parishioner_id
     ).first()
@@ -30,7 +31,7 @@ def get_parishioner_or_404(session: SessionDep, parishioner_id: int):
 # Get all skills for a parishioner
 @skills_router.get("/", response_model=APIResponse)
 async def get_parishioner_skills(
-    parishioner_id: int = Path(..., description="The ID of the parishioner"),
+    parishioner_id: UUID = Path(..., description="The ID of the parishioner"),
     session: SessionDep = None,
     current_user: CurrentUser = None,
 ) -> APIResponse:
@@ -51,7 +52,7 @@ async def get_parishioner_skills(
 # Add a new skill to a parishioner
 @skills_router.post("/", response_model=APIResponse)
 async def add_parishioner_skill(
-    parishioner_id: int = Path(..., description="The ID of the parishioner"),
+    parishioner_id: UUID = Path(..., description="The ID of the parishioner"),
     skill: SkillCreate = None,
     session: SessionDep = None,
     current_user: CurrentUser = None,
@@ -110,7 +111,7 @@ async def add_parishioner_skill(
 # Add multiple skills to a parishioner at once
 @skills_router.post("/batch", response_model=APIResponse)
 async def add_multiple_skills(
-    parishioner_id: int = Path(..., description="The ID of the parishioner"),
+    parishioner_id: UUID = Path(..., description="The ID of the parishioner"),
     skills: List[SkillBase] = None,
     session: SessionDep = None,
     current_user: CurrentUser = None,
@@ -176,7 +177,7 @@ async def add_multiple_skills(
 # Remove a skill from a parishioner
 @skills_router.delete("/{skill_id}", response_model=APIResponse)
 async def remove_parishioner_skill(
-    parishioner_id: int = Path(..., description="The ID of the parishioner"),
+    parishioner_id: UUID = Path(..., description="The ID of the parishioner"),
     skill_id: int = Path(..., description="The ID of the skill to remove"),
     session: SessionDep = None,
     current_user: CurrentUser = None,
@@ -234,7 +235,7 @@ async def remove_parishioner_skill(
 # Get all available skills (global endpoint)
 @skills_router.get("/all-available", response_model=APIResponse)
 async def get_all_available_skills(
-    parishioner_id: int = Path(..., description="The ID of the parishioner"),
+    parishioner_id: UUID = Path(..., description="The ID of the parishioner"),
     session: SessionDep = None,
     current_user: CurrentUser = None,
     skip: int = Query(0, ge=0),

@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, Enum, ForeignKey, Table, Text, func, UniqueConstraint
+import uuid
+from sqlalchemy import UUID, Boolean, Column, Date, DateTime, Integer, String, Enum, ForeignKey, Table, Text, func, UniqueConstraint
 from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
 
@@ -11,7 +12,7 @@ from app.models.society import society_members
 parishioner_skills = Table(
     'par_parishioner_skills',
     Base.metadata,
-    Column('parishioner_id', Integer, ForeignKey('parishioners.id', ondelete="CASCADE")),
+    Column('parishioner_id', UUID(as_uuid=True), ForeignKey('parishioners.id', ondelete="CASCADE")),
     Column('skill_id', Integer, ForeignKey('par_skills.id')),
     Column('created_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now()),
     Column('updated_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=func.now())
@@ -21,7 +22,7 @@ parishioner_skills = Table(
 parishioner_languages = Table(
     'par_languages', 
     Base.metadata,
-    Column('parishioner_id', Integer, ForeignKey('parishioners.id', ondelete="CASCADE")),
+    Column('parishioner_id', UUID(as_uuid=True), ForeignKey('parishioners.id', ondelete="CASCADE")),
     Column('language_id', Integer, ForeignKey('languages.id', ondelete="CASCADE")) ,
     Column('created_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now()),
     Column('updated_at', DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=func.now())
@@ -36,7 +37,7 @@ class ParishionerSacrament(Base):
     __tablename__ = "par_sacraments"
     
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey('parishioners.id', ondelete="CASCADE"), nullable=False)
+    parishioner_id = Column(UUID(as_uuid=True), ForeignKey('parishioners.id', ondelete="CASCADE"), nullable=False)
     sacrament_id = Column(Integer, ForeignKey('sacrament.id', ondelete="CASCADE"), nullable=False)
     date_received = Column(Date, nullable=True)
     place = Column(String, nullable=True)
@@ -59,7 +60,7 @@ class ParishionerSacrament(Base):
 class Parishioner(Base):
     __tablename__ = "parishioners"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     old_church_id = Column(String, nullable=True)
     new_church_id = Column(String, nullable=True)
 
@@ -114,7 +115,7 @@ class Occupation(Base):
     __tablename__ = "par_occupations"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"), unique=True)
+    parishioner_id = Column(UUID(as_uuid=True), ForeignKey("parishioners.id", ondelete="CASCADE"), unique=True)
     role = Column(String, nullable=False)
     employer = Column(String, nullable=False)
 
@@ -128,7 +129,7 @@ class FamilyInfo(Base):
     __tablename__ = "par_family"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"), unique=True)
+    parishioner_id = Column(UUID(as_uuid=True), ForeignKey("parishioners.id", ondelete="CASCADE"), unique=True)
     
     # Spouse Information
     spouse_name = Column(String, nullable=True)
@@ -165,7 +166,7 @@ class EmergencyContact(Base):
     __tablename__ = "par_emergency_contacts"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"))
+    parishioner_id = Column(UUID(as_uuid=True), ForeignKey("parishioners.id", ondelete="CASCADE"))
     name = Column(String, nullable=False)
     relationship = Column(String, nullable=False)
     primary_phone = Column(String, nullable=False)
@@ -181,7 +182,7 @@ class MedicalCondition(Base):
     __tablename__ = "par_medical_conditions"
 
     id = Column(Integer, primary_key=True, index=True)
-    parishioner_id = Column(Integer, ForeignKey("parishioners.id", ondelete="CASCADE"))
+    parishioner_id = Column(UUID(as_uuid=True), ForeignKey("parishioners.id", ondelete="CASCADE"))
     condition = Column(String, nullable=False)
     notes = Column(Text, nullable=True)
 

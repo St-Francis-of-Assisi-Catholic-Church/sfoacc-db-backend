@@ -1,7 +1,10 @@
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import date, datetime
 from typing import Any, Optional, List, Union
 from enum import Enum
+
+
 from app.models.parishioner import MembershipStatus, Gender, LifeStatus, MaritalStatus, VerificationStatus
 from app.models.sacrament import SacramentType
 from app.schemas.sacrament import SacramentRead 
@@ -91,7 +94,7 @@ class ParSacramentUpdate(BaseModel):
     
 class ParSacramentRead(ParSacramentBase):
     id: int
-    parishioner_id: int
+    parishioner_id: UUID
     # sacrament_id: int
     sacrament: SacramentRead
     
@@ -159,7 +162,7 @@ class SkillCreate(SkillBase):
 # Read Schemas
 class OccupationRead(OccupationBase):
     id: int
-    parishioner_id: int
+    parishioner_id: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -176,7 +179,7 @@ class ChildRead(ChildBase):
 
 class EmergencyContactRead(EmergencyContactBase):
     id: int
-    parishioner_id: int
+    parishioner_id: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -185,7 +188,7 @@ class EmergencyContactRead(EmergencyContactBase):
 
 class MedicalConditionRead(MedicalConditionBase):
     id: int
-    parishioner_id: int
+    parishioner_id: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -344,7 +347,7 @@ class ParishionerPartialUpdate(BaseModel):
 
 
 class ParishionerRead(ParishionerBase):
-    id: int
+    id: UUID
     created_at: datetime
     updated_at: datetime
     class Config:
