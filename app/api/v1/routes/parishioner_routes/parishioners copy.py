@@ -99,7 +99,17 @@ async def get_all_parishioners(
     current_user: CurrentUser,
     skip: int = Query(0, ge=0),
     limit: int = Query(1000, ge=1, le=1000),
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    #filter parameters
+    society_id: Optional[int] = Query(None, description="Filter by society ID"),
+    church_community_id: Optional[int] = Query(None, description="Filter by church community ID"),
+    place_of_worship_id: Optional[int] = Query(None, description="Filter by place of worship ID"),
+    gender: Optional[str] = Query(None, description="Filter by gender"),
+    birth_day_name: Optional[str] = Query(None, description="Filter by day of the week of birth (Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday)"),
+    birth_month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month of birth (1-12)"),
+    marital_status: Optional[str] = Query(None, description="Filter by marital status"),
+    membership_status: Optional[str] = Query(None, description="Filter by membership status"),
+    verification_status: Optional[str] = Query(None, description="Filter by verification status")
 ) -> Any:
     """Get list of all parishioners with pagination with an optional search by parishioner id, church ids, or any name"""
     if current_user.role not in ["super_admin", "admin"]:
@@ -128,6 +138,49 @@ async def get_all_parishioners(
                 ParishionerModel.maiden_name.ilike(search_term)
             )
         )
+
+    # apply society filter
+    if society_id is not None:
+    # Join with society_members table to filter by society
+        from app.models.society import society_members
+        query = query.join(
+            society_members,
+            ParishionerModel.id == society_members.c.parishioner_id
+        ).filter(
+            society_members.c.society_id == society_id
+    )
+        
+        # Apply church community filter
+    if church_community_id is not None:
+        query = query.filter(ParishionerModel.church_community_id == church_community_id)
+    
+    # Apply place of worship filter
+    if place_of_worship_id is not None:
+        query = query.filter(ParishionerModel.place_of_worship_id == place_of_worship_id)
+    
+    # Apply gender filter
+    if gender is not None:
+        query = query.filter(ParishionerModel.gender.ilike(f"%{gender}%"))
+    
+    # Apply marital status filter
+    if marital_status is not None:
+        query = query.filter(ParishionerModel.marital_status.ilike(f"%{marital_status}%"))
+    
+    # # Apply birth day filter
+    # if birth_day is not None:
+    #     query = query.filter(func.extract('day', ParishionerModel.date_of_birth) == birth_day)
+    
+    # # Apply birth month filter
+    # if birth_month is not None:
+    #     query = query.filter(func.extract('month', ParishionerModel.date_of_birth) == birth_month)
+    
+    # Apply membership status filter
+    if membership_status is not None:
+        query = query.filter(ParishionerModel.membership_status.ilike(f"%{membership_status}%"))
+    
+    # Apply verification status filter
+    if verification_status is not None:
+        query = query.filter(ParishionerModel.verification_status.ilike(f"%{verification_status}%"))
     
     # Get total count with search filter applied
     total_count = query.count()

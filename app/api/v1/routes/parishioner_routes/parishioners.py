@@ -110,7 +110,9 @@ async def get_all_parishioners(
     birth_day_name: Optional[str] = Query(None, description="Filter by day of the week of birth (Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday)"),
     birth_month: Optional[int] = Query(None, ge=1, le=12, description="Filter by month of birth (1-12)"),
     membership_status: Optional[str] = Query(None, description="Filter by membership status"),
-    verification_status: Optional[str] = Query(None, description="Filter by verification status")
+    verification_status: Optional[str] = Query(None, description="Filter by verification status"),
+    has_old_church_id: Optional[bool] = Query(None, description="Filter by presence of old church ID (true=has ID, false=no ID)"),
+    has_new_church_id: Optional[bool] = Query(None, description="Filter by presence of new church ID (true=has ID, false=no ID)")
 ) -> Any:
     """
     Get list of all parishioners with pagination and filtering options.
@@ -126,6 +128,8 @@ async def get_all_parishioners(
     - birth_month: Filter by month of birth (1-12)
     - membership_status: Filter by membership status
     - verification_status: Filter by verification status
+    - has_old_church_id: Filter by presence of old church ID (true=has ID, false=no ID)
+    - has_new_church_id: Filter by presence of new church ID (true=has ID, false=no ID)
     """
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
@@ -304,6 +308,41 @@ async def get_all_parishioners(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid verification status. Use: unverified, verified, pending (or variations)"
             )
+        
+
+    # Apply old church ID presence filter
+    if has_old_church_id is not None:
+        if has_old_church_id:
+            # Filter for parishioners who have an old church ID (not null and not empty)
+            query = query.filter(
+                ParishionerModel.old_church_id.isnot(None),
+                ParishionerModel.old_church_id != ''
+            )
+        else:
+            # Filter for parishioners who don't have an old church ID (null or empty)
+            query = query.filter(
+                or_(
+                    ParishionerModel.old_church_id.is_(None),
+                    ParishionerModel.old_church_id == ''
+                )
+            )
+
+    # Apply new church ID presence filter
+    if has_new_church_id is not None:
+        if has_new_church_id:
+            # Filter for parishioners who have a new church ID (not null and not empty)
+            query = query.filter(
+                ParishionerModel.new_church_id.isnot(None),
+                ParishionerModel.new_church_id != ''
+            )
+        else:
+            # Filter for parishioners who don't have a new church ID (null or empty)
+            query = query.filter(
+                or_(
+                    ParishionerModel.new_church_id.is_(None),
+                    ParishionerModel.new_church_id == ''
+                )
+            )
     
     # Get total count with all filters applied
     total_count = query.count()
@@ -339,6 +378,10 @@ async def get_all_parishioners(
         applied_filters["membership_status"] = membership_status
     if verification_status is not None:
         applied_filters["verification_status"] = verification_status
+    if has_old_church_id is not None:
+        applied_filters["has_old_church_id"] = has_old_church_id
+    if has_new_church_id is not None:
+        applied_filters["has_new_church_id"] = has_new_church_id
     
     return APIResponse(
         message=f"Retrieved {len(parishioners_data)} parishioners",
