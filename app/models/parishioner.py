@@ -1,6 +1,6 @@
 from datetime import datetime
 import uuid
-from sqlalchemy import UUID, Boolean, Column, Date, DateTime, Integer, String, Enum, ForeignKey, Table, Text, func, UniqueConstraint
+from sqlalchemy import UUID, Boolean, Column, Date, DateTime, Index, Integer, String, Enum, ForeignKey, Table, Text, func, UniqueConstraint
 from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
 
@@ -68,11 +68,17 @@ class Parishioner(Base):
     membership_status = Column(Enum(MembershipStatus), nullable=False, default=MembershipStatus.ACTIVE, server_default=MembershipStatus.ACTIVE.name)
     verification_status = Column(Enum(VerificationStatus), nullable=False, default=VerificationStatus.UNVERIFIED, server_default=VerificationStatus.UNVERIFIED.name)
 
+     # Core identity fields
+    first_name = Column(String(100), nullable=False, index=True)
+    last_name = Column(String(100), nullable=False, index=True)
+    other_names = Column(String(200), nullable=True)
+    maiden_name = Column(String(100), nullable=True)
+
     # Personal Info
-    first_name = Column(String, nullable=False)
-    other_names = Column(String, nullable=True)
-    last_name = Column(String, nullable=False)
-    maiden_name = Column(String, nullable=True)
+    # first_name = Column(String, nullable=False)
+    # other_names = Column(String, nullable=True)
+    # last_name = Column(String, nullable=False)
+    # maiden_name = Column(String, nullable=True)
     gender = Column(Enum(Gender), nullable=False)
     date_of_birth = Column(Date, nullable=True)
     place_of_birth = Column(String, nullable=True)
@@ -92,6 +98,22 @@ class Parishioner(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
+
+     # Add the functional unique index at the table level
+    __table_args__ = (
+        # This creates the unique constraint in SQLAlchemy
+        Index(
+            'unique_parishioner_composite_idx',
+            'first_name', 'last_name', 'other_names', 
+            'date_of_birth', 'gender', 'place_of_birth',
+            unique=True,
+            postgresql_where=(
+                (first_name.isnot(None)) & (last_name.isnot(None))
+            )
+        ),
+    )
+    def __repr__(self):
+        return f"<Parishioner(id={self.id}, name='{self.first_name} {self.last_name}', old_id='{self.old_church_id}')>"
 
     # Relationships
     occupation_rel = db_relationship("Occupation", back_populates="parishioner_ref", uselist=False, cascade="all, delete-orphan")
