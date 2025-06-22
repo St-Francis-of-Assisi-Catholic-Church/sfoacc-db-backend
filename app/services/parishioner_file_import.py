@@ -585,8 +585,8 @@ class ParishionerImportService:
 
             # Handle church community - check if column exists
             church_community_id = None
-            if "Community" in row and not pd.isna(row["Community"]):
-                community_name = self.clean_text(row["Community"])
+            if "Church Community" in row and not pd.isna(row["Church Community"]):
+                community_name = self.clean_text(row["Church Community"])
                 if community_name:
                     # Try to find the church community by exact name first
                     church_community = self.db.query(ChurchCommunity).filter(
@@ -695,11 +695,28 @@ class ParishionerImportService:
                         self.db.add(child)
 
                 
+                # # Create Emergency Contact
+                # emergency_name_col = "Emergency Contact Name"
+                # emergency_number_col = "Emergency Contact Number"
+                # if (emergency_name_col in row and not pd.isna(row[emergency_name_col])) and \
+                #    (emergency_number_col in row and not pd.isna(row[emergency_number_col])):
+                #     emergency = EmergencyContact(
+                #         parishioner_id=parishioner.id,
+                #         name=self.clean_text(row[emergency_name_col]),
+                #         relationship="Not specified",  # Not in CSV
+                #         primary_phone=self.clean_phone_number(row[emergency_number_col])
+                #     )
+                #     self.db.add(emergency)
+
                 # Create Emergency Contact
-                emergency_name_col = "Emergency Contact Name"
-                emergency_number_col = "Emergency Contact Number"
-                if (emergency_name_col in row and not pd.isna(row[emergency_name_col])) and \
-                   (emergency_number_col in row and not pd.isna(row[emergency_number_col])):
+                emergency_name_columns = ["Emergency Contact Name", "In Case of Emergency Call"]
+                emergency_number_columns = ["Emergency Contact Number", "Contact number"]
+
+                # Find which column is present in the row
+                emergency_name_col = next((col for col in emergency_name_columns if col in row and not pd.isna(row[col])), None)
+                emergency_number_col = next((col for col in emergency_number_columns if col in row and not pd.isna(row[col])), None)
+
+                if emergency_name_col and emergency_number_col:
                     emergency = EmergencyContact(
                         parishioner_id=parishioner.id,
                         name=self.clean_text(row[emergency_name_col]),
@@ -772,7 +789,7 @@ class ParishionerImportService:
                         parishioner.languages_rel.append(language)
                 
                 # Process church societies if available
-                societies_col = next((col for col in ["Church Groups/Societies", "Member of Any Church Society / Group"] if col in row and not pd.isna(row[col])), None)
+                societies_col = next((col for col in ["Church Groups/Societies", "Member of Any Church Society / Group", "If yes, Select from the list below"] if col in row and not pd.isna(row[col])), None)
                 if societies_col and not pd.isna(row[societies_col]):
                     self.process_societies(parishioner.id, row[societies_col])
                 
