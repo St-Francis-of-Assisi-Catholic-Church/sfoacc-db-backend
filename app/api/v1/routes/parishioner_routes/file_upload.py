@@ -400,16 +400,16 @@ async def get_import_template():
                 "Marital Status",
                 "Spouse Name",
                 "Name of Kids (if any)",
-                "FATHER'S NAME",
+                "Father's Name",
                 "Father's Life Status",
-                "MOTHER'S NAME",
+                "Mother's Name",
                 "Mother's Life Status",
                 "Unique ID ",
                 "Place of Worship",
                 "Current place of Residence/Area",
                 "Languages Spoken",
                 "Church Groups/Societies",
-                "Community"
+                "Church Community"
             ],
             "format_rules": [
                 "The file can be CSV or TSV format",

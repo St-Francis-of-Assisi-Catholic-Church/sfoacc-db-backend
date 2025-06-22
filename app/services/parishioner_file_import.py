@@ -662,7 +662,7 @@ class ParishionerImportService:
                 
                 # Find spouse name column (both with and without leading space)
                 spouse_name_col = None
-                for col_name in ["Spouse Name", " Spouse Name"]:
+                for col_name in ["Spouse Name", " Spouse Name", "If Married, Full name of Spouse.", "If Married, Full name of Spouse"]:
                     if col_name in row and not pd.isna(row[col_name]):
                         spouse_name_col = col_name
                         break
@@ -671,9 +671,9 @@ class ParishionerImportService:
                 family_info = FamilyInfo(
                     parishioner_id=parishioner.id,
                     spouse_name=self.clean_text(row.get(spouse_name_col, "")),
-                    father_name=self.clean_text(row.get("FATHER'S NAME", "")),
+                    father_name=self.clean_text(row.get("Fathers's Name", "")),
                     father_status=self.map_parental_status(row.get("Father's Life Status", "")),
-                    mother_name=self.clean_text(row.get("MOTHER'S NAME", "")),
+                    mother_name=self.clean_text(row.get("Mother's Name", "")),
                     mother_status=self.map_parental_status(row.get("Mother's Life Status", ""))
                 )
                 self.db.add(family_info)
@@ -777,7 +777,7 @@ class ParishionerImportService:
                     self.process_societies(parishioner.id, row[societies_col])
                 
                 # Process sacraments
-                sacrament_col = next((col for col in ["Church Sacrements", "Church sacraments"] if col in row), None)
+                sacrament_col = next((col for col in ["Church Sacrements", "Church sacraments", "Church Sacraments", "church sacraments"] if col in row), None)
                 if sacrament_col and not pd.isna(row[sacrament_col]):
                     self.process_sacraments(parishioner.id, row[sacrament_col])
 
