@@ -19,51 +19,6 @@ logger = logging.getLogger(__name__)
 
 file_upload_router = APIRouter()
 
-def is_valid_email(email: str) -> bool:
-    """
-    Validate email address using regex pattern.
-    
-    Args:
-        email: Email string to validate
-        
-    Returns:
-        bool: True if valid, False otherwise
-    """
-    if not email or pd.isna(email):
-        return True  # Empty email is allowed
-    
-    email = str(email).strip()
-    
-    # If email is empty after stripping, it's valid (optional field)
-    if not email:
-        return True
-    
-    # Email regex pattern - comprehensive but not overly strict
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    
-    return re.match(email_pattern, email) is not None
-
-def sanitize_email(email: str) -> Optional[str]:
-    """
-    Sanitize email address - convert to lowercase and strip whitespace.
-    
-    Args:
-        email: Email string to sanitize
-        
-    Returns:
-        str or None: Sanitized email or None if empty
-    """
-    if pd.isna(email) or not email:
-        return None
-    
-    email = str(email).strip().lower()
-    
-    # Return None for empty strings after stripping
-    if not email:
-        return None
-    
-    return email
-
 def is_valid_date_format(date_str: str) -> bool:
     """
     Check if date string is in a valid format (YYYY-MM-DD or DD/MM/YYYY)
@@ -95,24 +50,17 @@ def is_valid_date_format(date_str: str) -> bool:
     
     return False
 
-def convert_date_format(date_str: str) -> Optional[str]:
+def convert_date_format(date_str: str) -> str:
     """
-    Convert date string to ISO format (YYYY-MM-DD) or return None for empty/invalid dates
+    Convert date string to ISO format (YYYY-MM-DD)
     
     Args:
         date_str: Date string to convert
         
     Returns:
-        str or None: Date in ISO format (YYYY-MM-DD) or None
+        str: Date in ISO format (YYYY-MM-DD)
     """
-    if pd.isna(date_str) or not date_str:
-        return None
-    
-    date_str = str(date_str).strip()
-    
-    # Return None for empty strings after stripping
-    if not date_str:
-        return None
+    date_str = date_str.strip()
     
     # Already in ISO format
     if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
@@ -137,7 +85,8 @@ def validate_csv_data(df: pd.DataFrame) -> Dict[str, Any]:
     """
     errors = []
     
-    # Check required columns - Date of Birth is no longer required
+    # Check required columns
+    # remove "Date of Birth" from required columns
     required_columns = ["Last Name (Surname)", "First Name", "Gender"]
     missing_columns = [col for col in required_columns if col not in df.columns]
     
@@ -160,14 +109,17 @@ def validate_csv_data(df: pd.DataFrame) -> Dict[str, Any]:
             if pd.isna(row[col]) or not str(row[col]).strip():
                 row_errors.append(f"Missing value for required field: {col}")
         
-        # Validate Date of Birth (optional but must be valid format if provided)
-        if "Date of Birth" in df.columns and not pd.isna(row["Date of Birth"]):
+        # Validate date format (YYYY-MM-DD)
+        # if not pd.isna(row["Date of Birth"]):
+        #     dob = str(row["Date of Birth"]).strip()
+        #     if not re.match(r'^\d{4}-\d{2}-\d{2}$', dob):
+        #         row_errors.append(f"Invalid date format for Date of Birth: {dob}. Expected format: YYYY-MM-DD")
+        if not pd.isna(row["Date of Birth"]):
             dob = str(row["Date of Birth"]).strip()
-            
-            # Check for N/A values and flag as error
-            if dob.lower() in ["n/a", "na"]:
-                row_errors.append(f"Date of Birth contains 'N/A'. Please update and try again")
-            elif dob and not is_valid_date_format(dob):
+            if dob in ["N/A", "n/a"]:
+                # return null
+                pass
+            if not is_valid_date_format(dob):
                 row_errors.append(f"Invalid date format for Date of Birth: {dob}. Expected format: YYYY-MM-DD or DD/MM/YYYY")
         
         # Validate gender
@@ -175,12 +127,6 @@ def validate_csv_data(df: pd.DataFrame) -> Dict[str, Any]:
             gender = str(row["Gender"]).strip().lower()
             if gender not in ["male", "female", "m", "f"]:
                 row_errors.append(f"Invalid gender: {row['Gender']}. Expected: Male or Female")
-        
-        # Validate email address if present
-        if "Email Address" in df.columns and not pd.isna(row["Email Address"]):
-            email = str(row["Email Address"]).strip()
-            if email and not is_valid_email(email):
-                row_errors.append(f"Invalid email format: {email}")
         
         # Add other validations as needed
         
@@ -226,8 +172,6 @@ def preprocess_csv_data(df: pd.DataFrame) -> pd.DataFrame:
     - Convert names to sentence case
     - Standardize delimiters
     - Clean data
-    - Sanitize emails
-    - Handle dates
     """
     # Convert text columns to sentence case
     text_columns = [
@@ -238,10 +182,11 @@ def preprocess_csv_data(df: pd.DataFrame) -> pd.DataFrame:
     for col in text_columns:
         if col in df.columns:
             df[col] = df[col].apply(
-                lambda x: str(x).strip().title() if not pd.isna(x) and str(x).strip() else None
+                lambda x: str(x).strip().title() if not pd.isna(x) else x
             )
     
     # Standardize multi-value fields to use semicolons
+    # multi_value_columns = ["Church Sacrements", "Name of Kids (if any)", "Skills/Talents"]
     multi_value_columns = [
         "Church Sacrements", 
         "Name of Kids (if any)", 
@@ -253,20 +198,18 @@ def preprocess_csv_data(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in multi_value_columns:
         if col in df.columns:
+            # df[col] = df[col].apply(
+            #     lambda x: ';'.join([item.strip() for item in str(x).replace(',', ';').split(';') if item.strip()]) 
+            #     if not pd.isna(x) else x
+            # )
             df[col] = df[col].apply(
-                lambda x: standardize_list_items(x) if not pd.isna(x) else None
+                lambda x: standardize_list_items(x) if not pd.isna(x) else x
             )
 
-    # Convert date formats to ISO format or None
+    # Convert date formats to ISO format
     if "Date of Birth" in df.columns:
         df["Date of Birth"] = df["Date of Birth"].apply(
-            lambda x: convert_date_format(str(x)) if not pd.isna(x) and str(x).strip() else None
-        )
-    
-    # Sanitize email addresses
-    if "Email Address" in df.columns:
-        df["Email Address"] = df["Email Address"].apply(
-            lambda x: sanitize_email(str(x)) if not pd.isna(x) else None
+            lambda x: convert_date_format(str(x)) if not pd.isna(x) else x
         )
     
     return df
@@ -281,8 +224,7 @@ async def upload_parishioners_csv(
     Upload a CSV or TSV file with parishioner data and import it into the database.
     
     The file should have columns matching the parishioner model fields.
-    Required columns: "Last Name (Surname)", "First Name", "Gender"
-    Optional columns: "Date of Birth", "Email Address", etc.
+    Required columns: "Last Name (Surname)", "First Name", "Date of Birth", "Gender"
     """
     # Check permissions
     if current_user.role != UserRole.SUPER_ADMIN:
@@ -347,11 +289,10 @@ async def upload_parishioners_csv(
         return {
             "success": True,
             "message": "Import completed",
-            "imported_count": result["success"],
             "total_records": result["total"],
             "success_count": result["success"],
             "failed_count": result["failed"],
-            "errors": result["errors"][:20] if result["errors"] else []  # Limit errors to first 20
+            "errors": result["errors"][:20]  # Limit errors to first 20
         }
         
     except Exception as e:
@@ -368,70 +309,69 @@ async def get_import_template():
     """
     return {
         "success": True,
-        "message": "Template fetched successfully",
+        "message": "Templete fetched successfully",
         "template": {
             "required_columns": [
-                "Last Name (Surname)", 
-                "First Name",
-                "Gender"
-            ],
-            "supported_columns": [
-                "Last Name (Surname)",
-                "First Name",
-                "Other Names",
-                "Maiden Name",
-                "Gender",
-                "Date of Birth",
-                "Place of Birth",
-                "Hometown",
-                "Region/State",
-                "Country",
-                "Mobile Number",
-                "WhatsApp Number",
-                "Email Address",
-                "Occupation/Profession (Indicate Self-Employed or Not Employed)",
-                "Current Workplace / Employer",
-                "Skills/Talents",
-                "Emergency Contact Name",
-                "Emergency Contact Number",
-                "Any Medical Condition",
-                "Medical Conditions",
-                "Church Sacrements",
-                "Marital Status",
-                "Spouse Name",
-                "Name of Kids (if any)",
-                "Father's Name",
-                "Father's Life Status",
-                "Mother's Name",
-                "Mother's Life Status",
-                "Unique ID ",
-                "Place of Worship",
-                "Current place of Residence/Area",
-                "Languages Spoken",
-                "Church Groups/Societies",
-                "Church Community"
-            ],
-            "format_rules": [
-                "The file can be CSV or TSV format",
-                "Date of Birth is optional. If provided, should be in format YYYY-MM-DD or DD/MM/YYYY (e.g., 1990-05-20 or 20/05/1990)",
-                "Do not use 'N/A' or 'n/a' for Date of Birth - leave empty if unknown",
-                "Email Address is optional. If provided, must be a valid email format (e.g., user@domain.com)",
-                "Gender should be 'Male' or 'Female' (or 'M'/'F')",
-                "Multiple items should be separated by semicolons (;) or comma (,)",
-                "Names will be converted to sentence case",
-                "Email addresses will be converted to lowercase",
-                "Required fields: Last Name, First Name, Gender"
-            ],
-            "example_data": [
-                {
-                    "Last Name (Surname)": "Smith",
-                    "First Name": "John",
-                    "Gender": "Male",
-                    "Date of Birth": "1985-04-15",
-                    "Email Address": "john.smith@email.com",
-                    "Church Sacrements": "BAPTISM;FIRST COMMUNION",
-                    "Skills/Talents": "Singing;Playing Piano;Teaching"
-                }
-            ]
+            "Last Name (Surname)", 
+            "First Name",
+            "Date of Birth",
+            "Gender"
+        ],
+        "supported_columns": [
+            "Last Name (Surname)",
+            "First Name",
+            "Other Names",
+            "Maiden Name",
+            "Gender",
+            "Date of Birth",
+            "Place of Birth",
+            "Hometown",
+            "Region/State",
+            "Country",
+            "Mobile Number",
+            "WhatsApp Number",
+            "Email Address",
+            "Occupation/Profession (Indicate Self-Employed or Not Employed)",
+            "Current Workplace / Employer",
+            "Skills/Talents",
+            "Emergency Contact Name",
+            "Emergency Contact Number",
+            "Any Medical Condition",
+            "Medical Conditions",
+            "Church Sacrements",
+            "Marital Status",
+            "Spouse Name",
+            "Name of Kids (if any)",
+            "FATHER'S NAME",
+            "Father's Life Status",
+            "MOTHER'S NAME",
+            "Mother's Life Status",
+            "Unique ID ",
+            "Place of Worship",
+            "Current place of Residence/Area",
+            "Languages Spoken",
+            "Church Groups/Societies",
+            "Community"
+        ],
+        "format_rules": [
+            "The file can be CSV or TSV format",
+            "Date of Birth should be in format YYYY-MM-DD (e.g., 1990-05-20)",
+            "Gender should be 'Male' or 'Female'",
+            "Multiple items should be separated by semicolons (;) or coma (,)",
+            "Names will be converted to sentence case",
+            "Required fields: Last Name, First Name, Date of Birth, Gender"
+        ],
+        "example_data": [
+            {
+                "Last Name (Surname)": "Smith",
+                "First Name": "John",
+                "Gender": "Male",
+                "Date of Birth": "1985-04-15",
+                "Church Sacrements": "BAPTISM;FIRST COMMUNION",
+                "Skills/Talents": "Singing;Playing Piano;Teaching"
+            }
+        ]
         }
     }
+
+
