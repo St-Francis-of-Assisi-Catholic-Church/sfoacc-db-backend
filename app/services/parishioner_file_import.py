@@ -585,7 +585,7 @@ class ParishionerImportService:
 
             # Handle church community - check if column exists
             church_community_id = None
-            if "Community" in row and not pd.isna(row["Church Community"]):
+            if "Church Community" in row and not pd.isna(row["Church Community"]):
                 community_name = self.clean_text(row["Church Community"])
                 if community_name:
                     # Try to find the church community by exact name first
