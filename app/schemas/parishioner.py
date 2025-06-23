@@ -300,7 +300,7 @@ class ParishionerBase(BaseModel):
     last_name: str = Field(..., min_length=2, max_length=50)
     maiden_name: Optional[str] = Field(None, max_length=50)
     gender: Gender
-    date_of_birth: date
+    date_of_birth: Optional[date] = None
     place_of_birth: Optional[str] = None
     hometown: Optional[str] = None
     region: Optional[str] = None
@@ -308,8 +308,7 @@ class ParishionerBase(BaseModel):
     marital_status: Optional[MaritalStatus] = MaritalStatus.SINGLE
     mobile_number: Optional[str] = None
     whatsapp_number: Optional[str] = None
-    # email_address: Optional[EmailStr] = None
-    email_address: Optional[str] = None
+    email_address: Optional[EmailStr] = None
     # place_of_worship: Optional[str] = None
     current_residence: Optional[str] = None
 
