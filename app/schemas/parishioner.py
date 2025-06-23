@@ -308,7 +308,8 @@ class ParishionerBase(BaseModel):
     marital_status: Optional[MaritalStatus] = MaritalStatus.SINGLE
     mobile_number: Optional[str] = None
     whatsapp_number: Optional[str] = None
-    email_address: Optional[EmailStr] = None
+    # email_address: Optional[EmailStr] = None
+    email_address: Optional[str] = None
     # place_of_worship: Optional[str] = None
     current_residence: Optional[str] = None
 
