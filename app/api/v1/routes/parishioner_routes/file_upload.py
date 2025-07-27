@@ -271,6 +271,344 @@ def preprocess_csv_data(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
+
+
+def create_column_mapping() -> Dict[str, str]:
+    """
+    Create a mapping from sanitized column names to standardized field names
+    This handles various case and spelling variations
+    """
+    return {
+        # Basic info
+        "timestamp": "timestamp",
+        "lastname": "last_name", 
+        "lastnamesurname": "last_name",
+        "surname": "last_name",
+        "firstname": "first_name",
+        "othernames": "other_names",
+        "middlename": "other_names",
+        "maidenname": "maiden_name",
+        "gender": "gender",
+        
+        # Date and place info
+        "dateofbirth": "date_of_birth",
+        "dob": "date_of_birth",
+        "birthdate": "date_of_birth",
+        "dayborn": "day_born",
+        "placeofbirth": "place_of_birth",
+        "birthplace": "place_of_birth",
+        "hometown": "hometown",
+        "regionstate": "region_state",
+        "region": "region_state",
+        "state": "region_state",
+        "country": "country",
+        
+        # Contact info
+        "currentplaceofresidencearea": "current_residence",
+        "currentresidence": "current_residence",
+        "residence": "current_residence",
+        "address": "current_residence",
+        "languagesspoken": "languages_spoken",
+        "languages": "languages_spoken",
+        "mobilenumber": "mobile_number",
+        "mobile": "mobile_number",
+        "phone": "mobile_number",
+        "phonenumber": "mobile_number",
+        "whatsappnumber": "whatsapp_number",
+        "whatsapp": "whatsapp_number",
+        "emailaddress": "email_address",
+        "email": "email_address",
+        
+        # Occupation
+        "occupationprofessionindicateselfemployedornotemployed": "occupation",
+        "occupation": "occupation",
+        "profession": "occupation",
+        "job": "occupation",
+        "currentworkplaceemployer": "employer",
+        "employer": "employer",
+        "workplace": "employer",
+        "company": "employer",
+        
+        # Skills and talents
+        "skillstalents": "skills_talents",
+        "skills": "skills_talents",
+        "talents": "skills_talents",
+        
+        # Emergency contact
+        "emergencycontactname": "emergency_contact_name",
+        "emergencyname": "emergency_contact_name",
+        "emergencycontactnumber": "emergency_contact_number",
+        "emergencynumber": "emergency_contact_number",
+        "emergencyphone": "emergency_contact_number",
+        "incaseofemergencycall": "emergency_contact_name",
+        "contactnumber": "emergency_contact_number",
+        
+        # Medical info
+        "anymedicalcondition": "any_medical_condition",
+        "medicalcondition": "medical_conditions",
+        "medicalconditions": "medical_conditions",
+        "healthcondition": "medical_conditions",
+        "ifyespleasestate": "medical_conditions_detail",
+        
+        # Church info
+        "churchsacraments": "church_sacraments",
+        "sacraments": "church_sacraments",
+        "churchsacrements": "church_sacraments",  # Handle misspelling
+        "maritalstatus": "marital_status",
+        "marital": "marital_status",
+        "spousename": "spouse_name",
+        "spouse": "spouse_name",
+        "numberofkidsifany": "number_of_kids",
+        "numberofchildren": "number_of_kids",
+        "children": "number_of_kids",
+        "nameofkidsifany": "kids_names",
+        "childrennames": "kids_names",
+        "kidsnames": "kids_names",
+        
+        # Family info
+        "fathersname": "father_name",
+        "fatherssname": "father_name",
+        "fathername": "father_name",
+        "fatherslifestatus": "father_status",
+        "fatherlifestatus": "father_status",
+        "fatherstatus": "father_status",
+        "mothersname": "mother_name",
+        "mothername": "mother_name",
+        "motherslifestatus": "mother_status",
+        "motherlifestatus": "mother_status",
+        "motherstatus": "mother_status",
+        
+        # Church membership
+        "nameofpreviouschurchattended": "previous_church",
+        "previouschurch": "previous_church",
+        "uniqueid": "unique_id",
+        "oldchurchid": "unique_id",
+        "churchid": "unique_id",
+        "memberofanychurchsocietygroup": "church_society_member",
+        "churchsociety": "church_society_member",
+        "churchgroupssocieties": "church_groups",
+        "churchgroups": "church_groups",
+        "societies": "church_groups",
+        "churchcommunity": "church_community",
+        "community": "church_community",
+        "placeofworship": "place_worship",
+        "placeworship": "place_worship",
+        "worship": "place_worship",
+        "church": "place_worship",
+        "uploadyourpicture": "picture_upload",
+        "picture": "picture_upload",
+        "photo": "picture_upload",
+    }
+
+def sanitize_column_name(column_name: str) -> str:
+    """
+    Sanitize a column name by:
+    1. Converting to lowercase
+    2. Removing special characters and spaces
+    3. Handling common variations
+    """
+    if not column_name or pd.isna(column_name):
+        return ""
+    
+    # Convert to string and strip whitespace
+    sanitized = str(column_name).strip()
+    
+    # Convert to lowercase
+    sanitized = sanitized.lower()
+    
+    # Remove special characters, spaces, and punctuation
+    # Keep only alphanumeric characters
+    sanitized = re.sub(r'[^a-z0-9]', '', sanitized)
+    
+    # Handle common variations
+    sanitized = sanitized.replace('fathers', 'fathers')  # Ensure consistent spelling
+    sanitized = sanitized.replace('mothers', 'mothers')  # Ensure consistent spelling
+    
+    return sanitized
+
+def map_csv_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Map CSV columns to standardized names using sanitization
+    """
+    column_mapping = create_column_mapping()
+    new_column_names = {}
+    unmapped_columns = []
+    
+    logger.info("Original CSV columns:")
+    for i, col in enumerate(df.columns):
+        logger.info(f"  {i+1}. '{col}'")
+    
+    # Process each column
+    for original_col in df.columns:
+        sanitized_col = sanitize_column_name(original_col)
+        
+        if sanitized_col in column_mapping:
+            standardized_name = column_mapping[sanitized_col]
+            new_column_names[original_col] = standardized_name
+            logger.info(f"Mapped: '{original_col}' -> '{standardized_name}' (via '{sanitized_col}')")
+        else:
+            # Keep original name if no mapping found
+            new_column_names[original_col] = original_col
+            unmapped_columns.append(original_col)
+            logger.warning(f"No mapping found for column: '{original_col}' (sanitized: '{sanitized_col}')")
+    
+    # Rename the columns
+    df_mapped = df.rename(columns=new_column_names)
+    
+    if unmapped_columns:
+        logger.warning(f"Unmapped columns: {unmapped_columns}")
+    
+    logger.info("Final mapped columns:")
+    for i, col in enumerate(df_mapped.columns):
+        logger.info(f"  {i+1}. '{col}'")
+    
+    return df_mapped
+
+def validate_required_columns(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Validate that required columns exist after mapping
+    """
+    required_columns = ["last_name", "first_name", "gender"]
+    missing_columns = []
+    
+    for col in required_columns:
+        if col not in df.columns:
+            missing_columns.append(col)
+    
+    if missing_columns:
+        return {
+            "valid": False,
+            "errors": [f"Missing required columns after mapping: {', '.join(missing_columns)}"]
+        }
+    
+    return {"valid": True, "errors": []}
+
+# Updated preprocessing function that includes column sanitization
+def preprocess_csv_content_with_sanitization(content: bytes) -> pd.DataFrame:
+    """
+    Preprocess CSV content with column name sanitization
+    """
+    try:
+        # First, try to decode and fix common issues
+        csv_string = content.decode('utf-8')
+        
+        # Fix common quote issues that cause parsing errors
+        lines = csv_string.split('\n')
+        fixed_lines = []
+        
+        for i, line in enumerate(lines):
+            if i == 0:  # Header line - keep as is
+                fixed_lines.append(line)
+                continue
+                
+            # Skip empty lines
+            if not line.strip():
+                continue
+                
+            # Fix unescaped quotes within fields
+            fixed_line = line
+            quote_count = line.count('"')
+            
+            # If we have an odd number of quotes, there's likely a malformed quote
+            if quote_count > 0 and quote_count % 2 != 0:
+                fixed_line = re.sub(r'(?<!^)(?<!,)"(?![,\n\r]|$)', '""', line)
+            
+            fixed_lines.append(fixed_line)
+        
+        # Rejoin the content
+        fixed_content = '\n'.join(fixed_lines)
+        
+        # Parse with pandas using robust settings
+        df = pd.read_csv(
+            StringIO(fixed_content),
+            dtype=str,
+            keep_default_na=False,
+            na_values=['', 'NA', 'N/A', 'null', 'NULL'],
+            engine='python',
+            on_bad_lines='warn',
+            quoting=csv.QUOTE_MINIMAL,
+            skipinitialspace=True,
+        )
+        
+        # Remove the empty trailing column if it exists
+        if df.columns[-1] == '' or 'Unnamed' in str(df.columns[-1]):
+            df = df.iloc[:, :-1]
+        
+        # Clean column names (remove extra spaces)
+        df.columns = df.columns.str.strip()
+        
+        # **NEW: Apply column sanitization and mapping**
+        df = map_csv_columns(df)
+        
+        # Remove completely empty rows
+        df = df.dropna(how='all')
+        
+        # Convert empty strings to None for better handling
+        df = df.replace('', None)
+        
+        logger.info(f"Successfully preprocessed and mapped CSV: {len(df)} rows, {len(df.columns)} columns")
+        return df
+        
+    except Exception as e:
+        logger.error(f"Error preprocessing CSV: {str(e)}")
+        raise
+
+# Updated validation function that works with mapped column names
+def validate_csv_data_mapped(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Validate the CSV data after column mapping
+    """
+    errors = []
+    
+    # Check required columns using mapped names
+    validation_result = validate_required_columns(df)
+    if not validation_result["valid"]:
+        return validation_result
+    
+    # Validate data in rows using mapped column names
+    for idx, row in df.iterrows():
+        row_errors = []
+        
+        # Skip completely empty rows
+        if row.isna().all():
+            continue
+            
+        # Check required fields exist in each row
+        required_fields = ["last_name", "first_name", "gender"]
+        for field in required_fields:
+            if pd.isna(row[field]) or not str(row[field]).strip():
+                row_errors.append(f"Missing value for required field: {field}")
+        
+        # Validate Date of Birth (optional but must be valid format if provided)
+        if "date_of_birth" in df.columns and not pd.isna(row["date_of_birth"]):
+            dob = str(row["date_of_birth"]).strip()
+            
+            if dob.lower() in ["n/a", "na"]:
+                row_errors.append(f"Date of Birth contains 'N/A'. Please update and try again")
+            elif dob and not is_valid_date_format(dob):
+                row_errors.append(f"Invalid date format for Date of Birth: {dob}. Expected format: YYYY-MM-DD or DD/MM/YYYY")
+        
+        # Validate gender
+        if not pd.isna(row["gender"]):
+            gender = str(row["gender"]).strip().lower()
+            if gender not in ["male", "female", "m", "f"]:
+                row_errors.append(f"Invalid gender: {row['gender']}. Expected: Male or Female")
+        
+        # Validate email address if present
+        if "email_address" in df.columns and not pd.isna(row["email_address"]):
+            email = str(row["email_address"]).strip()
+            if email and not is_valid_email(email):
+                row_errors.append(f"Invalid email format: {email}")
+        
+        if row_errors:
+            errors.append(f"Row {idx+2} (Line {idx+2} in file): {'; '.join(row_errors)}")
+    
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors
+    }
+
+
 @file_upload_router.post("/batch", status_code=status.HTTP_201_CREATED)
 async def upload_parishioners_csv(
     session: SessionDep,
@@ -302,43 +640,44 @@ async def upload_parishioners_csv(
     content = await file.read()
     
     try:
-        # Detect the delimiter based on file content
-        string_io = StringIO(content.decode('utf-8'))
-        sample = string_io.read(1024)
-        string_io.seek(0)
+        # # Detect the delimiter based on file content
+        # string_io = StringIO(content.decode('utf-8'))
+        # sample = string_io.read(1024)
+        # string_io.seek(0)
         
-        # Use csv.Sniffer to detect delimiter if possible
-        try:
-            dialect = csv.Sniffer().sniff(sample)
-            delimiter = dialect.delimiter
-        except csv.Error:
-            # Default to comma if detection fails
-            delimiter = ','
+        # # Use csv.Sniffer to detect delimiter if possible
+        # try:
+        #     dialect = csv.Sniffer().sniff(sample)
+        #     delimiter = dialect.delimiter
+        # except csv.Error:
+        #     # Default to comma if detection fails
+        #     delimiter = ','
         
-        # Read the CSV with detected or default delimiter
-        df = pd.read_csv(
-            string_io, 
-            delimiter=delimiter,
-            engine='python',
-            on_bad_lines="warn",
-            dtype=str,  # Read all columns as strings to prevent type conversion issues
-        )
+        # # Read the CSV with detected or default delimiter
+        # df = pd.read_csv(
+        #     string_io, 
+        #     delimiter=delimiter,
+        #     engine='python',
+        #     on_bad_lines="warn",
+        #     dtype=str,  # Read all columns as strings to prevent type conversion issues
+        # )
         
-        # Remove completely empty rows
-        df = df.dropna(how='all')
+        # # Remove completely empty rows
+        # df = df.dropna(how='all')
         
-        # Validate the data
-        validation_result = validate_csv_data(df)
+        # Use the new preprocessing function with column sanitization
+        df = preprocess_csv_content_with_sanitization(content)
+        
+        # Validate the data using mapped column names
+        validation_result = validate_csv_data_mapped(df)
         if not validation_result["valid"]:
             return {
                 "success": False,
                 "message": "Validation failed",
-                "errors": validation_result["errors"][:20]  # Limit to first 20 errors
+                "errors": validation_result["errors"][:20]
             }
         
-        # Preprocess the data (convert to sentence case, standardize delimiters, etc.)
-        df = preprocess_csv_data(df)
-        
+
         # Process the CSV data using the import service
         import_service = ParishionerImportService(session)
         result = import_service.import_csv(df)
@@ -390,13 +729,13 @@ async def get_import_template():
                 "WhatsApp Number",
                 "Email Address",
                 "Occupation/Profession (Indicate Self-Employed or Not Employed)",
-                "Current Workplace / Employer",
+                "Current Workplace/Employer",
                 "Skills/Talents",
                 "Emergency Contact Name",
                 "Emergency Contact Number",
                 "Any Medical Condition",
                 "Medical Conditions",
-                "Church Sacrements",
+                "Church Sacraments",
                 "Marital Status",
                 "Spouse Name",
                 "Name of Kids (if any)",
