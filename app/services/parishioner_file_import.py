@@ -179,7 +179,7 @@ class ParishionerImportService:
         
         if matches:
             closest_name = matches[0]
-            logger.info(f"Found closest match for '{search_name}': '{closest_name}'")
+            # logger.info(f"Found closest match for '{search_name}': '{closest_name}'")
             return entity_dict[closest_name]
         
         return None
@@ -386,7 +386,7 @@ class ParishionerImportService:
                     logger.warning(f"Sacrament '{sacrament_type}' not found in database and no close match found")
 
     def process_societies(self, parishioner_id: int, societies_str: str):
-        """Process societies string and create society relationships"""
+        """Process societies string and create society relationships with improved mapping"""
         if societies_str is None or not societies_str.strip():
             return
             
@@ -396,32 +396,221 @@ class ParishionerImportService:
         # Split by semicolon
         societies_list = [s.strip() for s in str(societies_str).split(';') if s.strip()]
         
+        # Society mapping dictionary for common variations
+        society_mappings = {
+            # Catholic Charismatic Renewal variations
+            'catholic charismatic renewal': 'Catholic Charismatic Renewal (CCR)',
+            'christian charismatic renewal': 'Catholic Charismatic Renewal (CCR)',
+            'ccr': 'Catholic Charismatic Renewal (CCR)',
+            'charismatic renewal': 'Catholic Charismatic Renewal (CCR)',
+            
+            # CYO variations
+            'cyo': 'Catholic Youth Organization (CYO)',
+            'catholic youth organization': 'Catholic Youth Organization (CYO)',
+            
+            # CASU variations
+            'casu': 'Catholic Students Union (CASU)',
+            'catholic students union': 'Catholic Students Union (CASU)',
+            
+            # KSJI variations (all map to same society)
+            'ksji': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'st john\'s international': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'st john s international': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'knights of st john': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'knights of saint john s international': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'st joseph ladies auxiliary 722 ksji': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            
+            # KNOLTA variations
+            'knolta': 'Knights and Ladies of the Alter (KNOLTA)',
+            'knights and ladies of the altar': 'Knights and Ladies of the Alter (KNOLTA)',
+            'knights and ladies of the alter': 'Knights and Ladies of the Alter (KNOLTA)',
+            'assisi knolta': 'Knights and Ladies of the Alter (KNOLTA)',
+            
+            # Lectors variations
+            'lectors': 'Lectors Ministry',
+            'lectors ministry': 'Lectors Ministry',
+            'lector': 'Lectors Ministry',
+            
+            # Christian Daughters variations
+            'christian daughters': 'Christian Daughters Association',
+            'christian daughters association': 'Christian Daughters Association',
+            'christian daughter': 'Christian Daughters Association',
+            'christian daugthers': 'Christian Daughters Association',
+            'cda': 'Christian Daughters Association',
+            
+            # Christian Mothers variations
+            'christian mothers association': 'Christian Mothers Association',
+            'christian mothers': 'Christian Mothers Association',
+            'christian mother': 'Christian Mothers Association',
+            'christain mothers': 'Christian Mothers Association',
+            
+            # St. Cecilia variations
+            'st cecilia': 'St. Cecilia Ewe Society',
+            'st cecilia ewe society': 'St. Cecilia Ewe Society',
+            'st ceclia': 'St. Cecilia Ewe Society',
+            
+            # Akan Society variations
+            'akan society': 'Holy Family Akan Society',
+            'akan': 'Holy Family Akan Society',
+            'holy family akan society': 'Holy Family Akan Society',
+            'holy family': 'Holy Family Akan Society',
+            'holy family akan group': 'Holy Family Akan Society',
+            'akan group': 'Holy Family Akan Society',
+            
+            # Legion of Mary
+            'legion of mary': 'Legion of Mary',
+            'legion': 'Legion of Mary',
+            
+            # Sacred Heart variations
+            'sacred heart of jesus': 'Sacred Heart of Jesus Confraternity',
+            'sacred heart': 'Sacred Heart of Jesus Confraternity',
+            'scared heart': 'Sacred Heart of Jesus Confraternity',
+            
+            # Tarcisians variations
+            'tarcisian': 'League of Tarcisians',
+            'tarsician': 'League of Tarcisians',
+            'league of tarcisians': 'League of Tarcisians',
+            
+            # Usher variations
+            'usher': 'Usher Group',
+            'usher group': 'Usher Group',
+            'ushering ministry': 'Usher Group',
+            
+            # St. Theresa variations
+            'st theresa of the child jesus': 'St. Theresa of Child Jesus',
+            'st theresa of child jesus': 'St. Theresa of Child Jesus',
+            'st theresa': 'St. Theresa of Child Jesus',
+            'st theresa of the child jesush': 'St. Theresa of Child Jesus',
+            'st theresa of the child jeus': 'St. Theresa of Child Jesus',
+            
+            # Media Team
+            'media team': 'St. Francis of Assisi (SFACC) Media Team',
+            
+            # Ga-Dangme variations
+            'st gabriel ga dangme guild': 'St Gabriel Ga-Dangme Guild',
+            'ga dangbe society': 'St Gabriel Ga-Dangme Guild',
+            'ga dangme society': 'St Gabriel Ga-Dangme Guild',
+            'ga dangme': 'St Gabriel Ga-Dangme Guild',
+            'ga dangbe': 'St Gabriel Ga-Dangme Guild',
+            'ga adangme': 'St Gabriel Ga-Dangme Guild',
+            'ga adamgbe': 'St Gabriel Ga-Dangme Guild',
+            
+            # Choir variations
+            'main choir': 'St. Francis of Assisi Main Choir',
+            'st francis of assisi main choir': 'St. Francis of Assisi Main Choir',
+            'choir': 'St. Francis of Assisi Main Choir',
+            'church choir': 'St. Francis of Assisi Main Choir',
+            'st francis of assisi of assisi main choir': 'St. Francis of Assisi Main Choir',
+            
+            # Northern Union
+            'northern union': 'Northern Union',
+            'northen union': 'Northern Union',
+            'st francis northern union': 'Northern Union',
+            
+            # St. Vincent de Paul
+            'st vincent de paul': 'St. Vincent de Paul',
+            'st vincent': 'St. Vincent de Paul',
+            'st vincent depaul': 'St. Vincent de Paul',
+            
+            # Nigeria Community
+            'nigeria community': 'Nigeria Community',
+            
+            # Knights and Ladies of Marshall variations
+            'knights and ladies of marshall': 'Knights and Ladies of Mashall',
+            'knights of marshall': 'Knights and Ladies of Mashall',
+            'knight and ladies of marshall': 'Knights and Ladies of Mashall',
+            'marshallan association': 'Knights and Ladies of Mashall',
+            'marshallan': 'Knights and Ladies of Mashall',
+            'mashallan association': 'Knights and Ladies of Mashall',
+            'marshallans': 'Knights and Ladies of Mashall',
+            'knights and ladies of mashallan': 'Knights and Ladies of Mashall',
+            'ladies of marshall': 'Knights and Ladies of Mashall',
+            'ladies of marshallan': 'Knights and Ladies of Mashall',
+            'ladies of mashallan': 'Knights and Ladies of Mashall',
+            'noble order of ladies of marshall': 'Knights and Ladies of Mashall',
+            
+            # New societies that should be added to DB (map to exact names)
+            'trinity choir': 'Trinity Choir',
+            'ycw': 'Young Christian Workers (YCW)',
+            'catholic women council': 'Catholic Women Council',
+            'catholic women': 'Catholic Women Council',
+            'st anthony guild': 'St. Anthony Guild',
+            'st anthony s guild': 'St. Anthony Guild',
+            'catholic association of media practioners': 'Catholic Association of Media Practitioners',
+            'friday borns': 'Friday Borns Association',
+            'friday day borns group': 'Friday Borns Association',
+            'mass servant': 'Mass Servers Guild',
+            'mass server': 'Mass Servers Guild',
+            'mass server aspirant': 'Mass Servers Guild',
+            'mass severs': 'Mass Servers Guild',
+            'catechist': 'Catechists Association',
+            'eucharistic minister': 'Eucharistic Ministers',
+            'eucharist minister': 'Eucharistic Ministers',
+            'drama team': 'Drama Ministry',
+            'drama': 'Drama Ministry',
+            'welfare': 'Parish Welfare Committee',
+            'sunday school': 'Sunday School Ministry',
+            'youth choir': 'Youth Choir',
+            'singing ministry': 'Youth Choir',
+            'women fellowship': 'Women\'s Fellowship',
+            'christian sons': 'Christian Men\'s Fellowship',
+            'st michael ewe society': 'St. Michael Ewe Society',
+            'st micheal ewe society': 'St. Michael Ewe Society',
+            'st paul dagaaba society': 'St. Paul Dagaaba Society',
+            'francophone community': 'Francophone Community',
+            'care givers group': 'Care Givers Ministry',
+            'care giver': 'Care Givers Ministry',
+            'secretarial team': 'Parish Secretariat',
+            'thursday born': 'Thursday Borns Association',
+            'sunday borns': 'Sunday Borns Association'
+        }
+        
+        def normalize_society_name(name):
+            """Normalize society name for matching"""
+            return name.lower().strip().replace('.', '').replace(',', '').replace('  ', ' ')
+        
         for society_name in societies_list:
             society_name = self.clean_text(society_name)
             
             if society_name:
-                # Try to find the society by exact name first
-                society = self.db.query(Society).filter(
-                    Society.name == society_name
-                ).first()
+                normalized_name = normalize_society_name(society_name)
                 
-                # If not found, try fuzzy matching
+                # First, try direct mapping
+                mapped_name = society_mappings.get(normalized_name)
+                society = None
+                
+                if mapped_name:
+                    # Look for the mapped name in database
+                    society = self.db.query(Society).filter(
+                        Society.name == mapped_name
+                    ).first()
+                    
+                    if society:
+                        logger.info(f"Found mapped society '{society.name}' for input '{society_name}'")
+                    else:
+                        logger.warning(f"Mapped society '{mapped_name}' not found in database for input '{society_name}'")
+                
+                # If no direct mapping or mapped society not found, try exact match
                 if not society:
-                    # Get all societies from the database
+                    society = self.db.query(Society).filter(
+                        Society.name == society_name
+                    ).first()
+                
+                # If still not found, try fuzzy matching
+                if not society:
                     all_societies = self.db.query(Society).all()
                     
                     if all_societies:
-                        # Create a mapping of society names to society objects
                         society_names = []
                         society_dict = {}
                         
                         for soc in all_societies:
-                            soc_name = soc.name.lower().strip()
+                            soc_name = normalize_society_name(soc.name)
                             society_names.append(soc_name)
                             society_dict[soc_name] = soc
                         
                         # Find the closest match
-                        matches = get_close_matches(society_name.lower(), society_names, n=1, cutoff=0.6)
+                        matches = get_close_matches(normalized_name, society_names, n=1, cutoff=0.6)
                         
                         if matches:
                             closest_name = matches[0]
@@ -432,26 +621,36 @@ class ParishionerImportService:
                     # Add relationship between parishioner and society
                     parishioner = self.db.query(Parishioner).get(parishioner_id)
                     if parishioner:
-                        # Check if the relationship already exists
-                        existing_membership = self.db.execute(
-                            society_members.select().where(
+                        try:
+                            # FIXED: Use a safer approach to check for existing membership
+                            # Use count instead of fetchone to avoid the interface error
+                            existing_count = self.db.query(society_members).filter(
                                 society_members.c.society_id == society.id,
                                 society_members.c.parishioner_id == parishioner.id
-                            )
-                        ).fetchone()
-                        
-                        if not existing_membership:
-                            # Add to society members - don't set join_date
-                            self.db.execute(
-                                society_members.insert().values(
-                                    society_id=society.id,
-                                    parishioner_id=parishioner.id,
-                                    membership_status=MembershipStatus.ACTIVE
+                            ).count()
+                            
+                            if existing_count == 0:
+                                # Add to society members
+                                self.db.execute(
+                                    society_members.insert().values(
+                                        society_id=society.id,
+                                        parishioner_id=parishioner.id,
+                                        membership_status=MembershipStatus.ACTIVE
+                                    )
                                 )
-                            )
-                            logger.info(f"Added parishioner {parishioner.id} to society '{society.name}'")
+                                logger.info(f"Added parishioner {parishioner.id} to society '{society.name}'")
+                            else:
+                                logger.debug(f"Parishioner {parishioner.id} already member of '{society.name}'")
+                                
+                        except Exception as e:
+                            logger.error(f"Error checking/adding society membership for '{society_name}': {str(e)}")
+                            # Continue processing other societies instead of failing completely
+                            continue
+                            
                 else:
                     logger.warning(f"Society '{society_name}' not found in database and no close match found")
+
+
 
     def process_languages(self, parishioner_id: int, languages_str: str):
         """Process languages string with better delimiter handling"""
