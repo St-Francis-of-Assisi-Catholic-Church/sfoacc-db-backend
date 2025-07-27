@@ -32,6 +32,26 @@ class ParishionerImportService:
         if not value:
             return ""
         return str(value).strip().lower()
+
+    def normalize_multiitem_list(self, input_str: str) -> str:
+        """
+        Normalizes a multi-item string list by replacing various delimiters
+        (like ', and ', ' and ', ',') with a semicolon (;).
+
+        Args:
+            input_str (str): The original string containing multiple items.
+
+        Returns:
+            str: A string where all item separators are semicolons.
+        """
+        if not input_str:
+            return ""
+        input_str = str(input_str)
+        input_str = input_str.replace(', and ', ';')
+        input_str = input_str.replace(' and ', ';')
+        input_str = input_str.replace(',', ';')
+        return input_str
+
     
     def check_for_duplicate(self, first_name: str, last_name: str, 
                           other_names: str = None, date_of_birth: datetime.date = None,
@@ -274,11 +294,11 @@ class ParishionerImportService:
         - Last name initial
         - Day of birth (2 digits)
         - Month of birth (2 digits)
-        - Old church ID (padded to 4 digits)
-        
-        Example: Kofi Nkrumah, born on May 2, 2000, with old ID of 8 
-                 would get: KN0205-0008
-                 
+        - Old church ID (padded to 5 digits)
+
+        Example: Kofi Nkrumah, born on May 2, 2000, with old ID of 8
+                 would get: KN0205-00008
+
         If no old_church_id is provided, return None (don't generate a new ID)
         """
         # If no old_church_id, don't generate new ID
@@ -334,10 +354,8 @@ class ParishionerImportService:
         if pd.isna(sacraments_str) or not sacraments_str:
             return
         
-        sacraments_str = sacraments_str.replace(', and ', ';')
-        sacraments_str = sacraments_str.replace(' and ', ';')
-        sacraments_str = sacraments_str.replace(',', ';')
-            
+        sacraments_str = self.normalize_multiitem_list(sacraments_str)
+
         # Split by semicolon
         sacraments_list = [s.strip() for s in str(sacraments_str).split(';') if s.strip()]
         
@@ -372,10 +390,8 @@ class ParishionerImportService:
         if societies_str is None or not societies_str.strip():
             return
             
-        # Handle various delimiters (comma, 'and', semicolon)
-        societies_str = societies_str.replace(', and ', ';')
-        societies_str = societies_str.replace(' and ', ';')
-        societies_str = societies_str.replace(',', ';')
+        # Normalize the societies string
+        societies_str = self.normalize_multiitem_list(societies_str)
 
         # Split by semicolon
         societies_list = [s.strip() for s in str(societies_str).split(';') if s.strip()]
@@ -443,10 +459,8 @@ class ParishionerImportService:
             return
         
         # Handle various delimiters (comma, 'and', semicolon)
-        languages_str = languages_str.replace(', and ', ';')
-        languages_str = languages_str.replace(' and ', ';')
-        languages_str = languages_str.replace(',', ';')
-        
+        languages_str = self.normalize_multiitem_list(languages_str)
+
         # Split by semicolon
         languages_list = [l.strip() for l in languages_str.split(';') if l.strip()]
         
@@ -471,10 +485,8 @@ class ParishionerImportService:
             return
         
         # Handle various delimiters (comma, 'and', semicolon)
-        skills_str = skills_str.replace(', and ', ';')
-        skills_str = skills_str.replace(' and ', ';')
-        skills_str = skills_str.replace(',', ';')
-        
+        skills_str = self.normalize_multiitem_list(skills_str)
+
         # Split by semicolon
         skills_list = [s.strip() for s in skills_str.split(';') if s.strip()]
         
@@ -639,13 +651,16 @@ class ParishionerImportService:
             # Try to add the parishioner
             try:
                 self.db.add(parishioner)
-                self.db.flush()  # This will trigger the unique constraint check
+                self.db.flush()  # This will trigger the unique constraint check and get the ID
+                
+                # Store the ID before any potential session issues
+                parishioner_id = parishioner.id
                 
                 # Create Occupation
                 if ("occupation" in row and not pd.isna(row["occupation"])) or \
                 ("employer" in row and not pd.isna(row["employer"])):
                     occupation = Occupation(
-                        parishioner_id=parishioner.id,
+                        parishioner_id=parishioner_id,
                         role=self.clean_text(row.get("occupation", "")) or "Not specified",
                         employer=self.clean_text(row.get("employer", "")) or "Not specified"
                     )
@@ -653,7 +668,7 @@ class ParishionerImportService:
 
                 # Create FamilyInfo
                 family_info = FamilyInfo(
-                    parishioner_id=parishioner.id,
+                    parishioner_id=parishioner_id,
                     spouse_name=self.clean_text(row.get("spouse_name", "")),
                     father_name=self.clean_text(row.get("father_name", "")),
                     father_status=self.map_parental_status(row.get("father_status", "")),
@@ -666,13 +681,7 @@ class ParishionerImportService:
                 # Create Children if any
                 if "kids_names" in row and not pd.isna(row["kids_names"]):
                     kids_str = str(row["kids_names"])
-
-                    # Handle various delimiters (comma, 'and', semicolon)
-                    kids_str = kids_str.replace(', and ', ';')
-                    kids_str = kids_str.replace(' and ', ';')
-                    kids_str = kids_str.replace(',', ';')
-
-                    # Split by semicolon (standardized in preprocessing)
+                    kids_str = self.normalize_multiitem_list(kids_str)
                     kids_list = [k.strip() for k in kids_str.split(';') if k.strip()]
                     
                     for kid_name in kids_list:
@@ -686,7 +695,7 @@ class ParishionerImportService:
                 if ("emergency_contact_name" in row and not pd.isna(row["emergency_contact_name"])) and \
                 ("emergency_contact_number" in row and not pd.isna(row["emergency_contact_number"])):
                     emergency = EmergencyContact(
-                        parishioner_id=parishioner.id,
+                        parishioner_id=parishioner_id,
                         name=self.clean_text(row["emergency_contact_name"]),
                         relationship="Not specified",  # Not in CSV
                         primary_phone=self.clean_phone_number(row["emergency_contact_number"])
@@ -709,7 +718,7 @@ class ParishionerImportService:
                 # Add the medical condition if found
                 if medical_conditions:
                     medical = MedicalCondition(
-                        parishioner_id=parishioner.id,
+                        parishioner_id=parishioner_id,
                         condition=medical_conditions
                     )
                     self.db.add(medical)
@@ -717,14 +726,7 @@ class ParishionerImportService:
                 # Create Skills if any
                 if "skills_talents" in row and not pd.isna(row["skills_talents"]):
                     skills_str = str(row["skills_talents"])
-
-
-                    # Handle various delimiters (comma, 'and', semicolon)
-                    skills_str = skills_str.replace(', and ', ';')
-                    skills_str = skills_str.replace(' and ', ';')
-                    skills_str = skills_str.replace(',', ';')
-
-                    # Split by semicolon (standardized in preprocessing)
+                    skills_str = self.normalize_multiitem_list(skills_str)
                     skills_list = [s.strip() for s in skills_str.split(';') if s.strip()]
                     
                     for skill_name in skills_list:
@@ -742,14 +744,7 @@ class ParishionerImportService:
                 # Create Languages if any
                 if "languages_spoken" in row and not pd.isna(row["languages_spoken"]):
                     languages_str = str(row["languages_spoken"])
-
-
-                    # Handle various delimiters (comma, 'and', semicolon)
-                    languages_str = languages_str.replace(', and ', ';')
-                    languages_str = languages_str.replace(' and ', ';')
-                    languages_str = languages_str.replace(',', ';')
-
-                    # Split by semicolon (standardized in preprocessing)
+                    languages_str = self.normalize_multiitem_list(languages_str)
                     languages_list = [l.strip() for l in languages_str.split(';') if l.strip()]
                     
                     for language_name in languages_list:
@@ -766,16 +761,16 @@ class ParishionerImportService:
                 
                 # Process church societies if available
                 if "church_groups" in row and not pd.isna(row["church_groups"]):
-                    self.process_societies(parishioner.id, row["church_groups"])
+                    self.process_societies(parishioner_id, row["church_groups"])
                 
                 # Process sacraments
                 if "church_sacraments" in row and not pd.isna(row["church_sacraments"]):
-                    self.process_sacraments(parishioner.id, row["church_sacraments"])
+                    self.process_sacraments(parishioner_id, row["church_sacraments"])
 
                 # Commit the transaction
                 self.db.commit()
                 logger.info(f"Successfully created parishioner: {first_name} {last_name} (Row {row_number})")
-                return {"success": True, "parishioner_id": parishioner.id}
+                return {"success": True, "parishioner_id": parishioner_id}
                 
             except IntegrityError as e:
                 self.db.rollback()
@@ -810,7 +805,6 @@ class ParishionerImportService:
 
         logger.info(f"Starting import of {len(df)} records")
         
-        
         for index, row in df.iterrows():
             # Skip completely empty rows
             if row.isna().all():
@@ -819,35 +813,45 @@ class ParishionerImportService:
                 
             row_number = index + 2  # +2 because Excel/CSV rows start at 1 and we have headers
 
+            try:
+                # Process the row
+                row_result = self.process_row(row, row_number)
+                
+                if row_result["success"]:
+                    result["success"] += 1
+                    if result["success"] % 100 == 0:  # Progress logging
+                        logger.info(f"Processed {result['success']} records successfully...")
+                else:
+                    result["failed"] += 1
+                    error_detail = f"Error processing row {row_number}: {row_result['error']}"
+                    result["errors"].append(error_detail)
 
-            # Process the row
-            row_result = self.process_row(row, row_number)
-            
-            if row_result["success"]:
-                result["success"] += 1
-                if result["success"] % 100 == 0:  # Progress logging
-                    logger.info(f"Processed {result['success']} records successfully...")
-            else:
+                    # Track duplicates separately
+                    if row_result.get("duplicate", False):
+                        result["duplicates"] += 1
+                        result["duplicate_details"].append({
+                            "row": row_number,
+                            "name": f"{row.get('first_name', '')} {row.get('last_name', '')}",
+                            "error": row_result['error']
+                        })
+                        
+            except Exception as e:
+                # Handle any unexpected errors
+                try:
+                    self.db.rollback()
+                except:
+                    pass  # Rollback might fail if session is already corrupted
+                    
                 result["failed"] += 1
-                error_detail = f"Error processing row {index+2}: {row_result['error']}"
+                error_detail = f"Unexpected error for row {row_number}: {str(e)}"
                 result["errors"].append(error_detail)
-
+                logger.error(error_detail)
                 
-                # Track duplicates separately
-                if row_result.get("duplicate", False):
-                    result["duplicates"] += 1
-                    result["duplicate_details"].append({
-                        "row": row_number,
-                        "name": f"{row.get('First Name', '')} {row.get('Last Name (Surname)', '')}",
-                        "error": row_result['error']
-                    })
-                
-                
-                # if "duplicate" in row_result and row_result["duplicate"]:
-                #     result["duplicates"] += 1
-
+                # Continue with next row
+                continue
         
         # Log the final results
         logger.info(f"Import completed: {result['success']} successful, {result['failed']} failed, {result['duplicates']} duplicates")
         
         return result
+
