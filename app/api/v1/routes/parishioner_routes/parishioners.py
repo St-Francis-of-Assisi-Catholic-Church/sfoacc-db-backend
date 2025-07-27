@@ -661,6 +661,7 @@ async def update_parishioner(
 
     
 # generate churchID
+# generate churchID
 @router.post("/{parishioner_id}/generate-church-id", response_model=APIResponse)
 async def generate_church_id(
     *,
@@ -676,10 +677,10 @@ async def generate_church_id(
     Generate a new church ID for a parishioner.
     
     Format: first_name_initial + last_name_initial + day_of_birth(2 digits) + 
-    month_of_birth(2 digits) + "-" + old_church_id
+    month_of_birth(2 digits) + "-" + old_church_id (padded to 5 digits)
     
-    Example: Kofi Maxwell Nkrumah, DOB: 30/01/2005, Old ID: 045
-    New church ID: KN3001-045
+    Example: Kofi Maxwell Nkrumah, DOB: 30/01/2005, Old ID: 45
+    New church ID: KN3001-00045
     """
     if current_user.role not in ["super_admin", "admin"]:
         raise HTTPException(
@@ -724,6 +725,39 @@ async def generate_church_id(
         )
     
     try:
+        # Validate that old_church_id is numeric
+        try:
+            old_church_id_num = int(old_church_id)
+            if old_church_id_num < 0:
+                raise ValueError("Church ID cannot be negative")
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Old church ID must be a valid positive number"
+            )
+        
+        # Pad old church ID to 5 digits with leading zeros
+        padded_old_church_id = str(old_church_id_num).zfill(5)
+        
+        # Check if the old church ID already exists in records (comparing as integers to handle edge cases)
+        # Get all existing old church IDs and convert them to integers for comparison
+        existing_parishioners = session.query(ParishionerModel).filter(
+            ParishionerModel.old_church_id.isnot(None),
+            ParishionerModel.id != parishioner_id  # Exclude current parishioner
+        ).all()
+        
+        for existing in existing_parishioners:
+            try:
+                existing_id_num = int(existing.old_church_id)
+                if existing_id_num == old_church_id_num:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Old church ID '{old_church_id}' (equivalent to {padded_old_church_id}) already exists for parishioner: {existing.first_name} {existing.last_name}"
+                    )
+            except ValueError:
+                # Skip non-numeric old church IDs in database (shouldn't happen but defensive programming)
+                continue
+        
         # Generate new church ID
         first_name_initial = parishioner.first_name[0].upper()
         last_name_initial = parishioner.last_name[0].upper()
@@ -732,11 +766,11 @@ async def generate_church_id(
         day_of_birth = f"{parishioner.date_of_birth.day:02d}"
         month_of_birth = f"{parishioner.date_of_birth.month:02d}"
         
-        new_church_id = f"{first_name_initial}{last_name_initial}{day_of_birth}{month_of_birth}-{old_church_id}"
+        new_church_id = f"{first_name_initial}{last_name_initial}{day_of_birth}{month_of_birth}-{padded_old_church_id}"
         
         # Update parishioner with new and old church IDs
         parishioner.new_church_id = new_church_id
-        parishioner.old_church_id = old_church_id
+        parishioner.old_church_id = padded_old_church_id
         
         session.commit()
         session.refresh(parishioner)
@@ -775,9 +809,6 @@ async def generate_church_id(
                 new_church_id=parishioner.new_church_id
             )
 
-
-
-
         
         return APIResponse(
             message="Church ID generated successfully",
@@ -786,7 +817,7 @@ async def generate_church_id(
                 "old_church_id": parishioner.old_church_id,
                 "new_church_id": parishioner.new_church_id,
                 "email_sent": email_sent,
-                "sms_sent":  send_sms and bool(parishioner.mobile_number)
+                "sms_sent": send_sms and bool(parishioner.mobile_number)
             }
         )
         
