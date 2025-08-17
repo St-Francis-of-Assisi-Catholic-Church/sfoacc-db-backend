@@ -5,11 +5,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import create_access_token, verify_password
+from app.core.security import create_access_token, get_password_hash, verify_password
 from app.api.deps import SessionDep, CurrentUser, check_user_status
 
-from app.schemas.user import LoginResponse, User
-from app.models.user import User as UserModel
+from app.schemas.user import LoginResponse, PasswordResetRequest, PasswordResetResponse, User
+from app.models.user import User as UserModel, UserStatus
 
 router = APIRouter()
     
@@ -63,4 +63,64 @@ async def test_token(current_user: CurrentUser) -> Any:
     Test access token.
     """
     return User.model_validate(current_user)
+
+
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+async def reset_password(
+    reset_data: PasswordResetRequest,
+    session: SessionDep,
+) -> Any:
+    """
+    Reset password for users with RESET_REQUIRED status.
+    Validates temp password and sets new password, then auto-logs in the user.
+    """
+    # Find user by email
+    user = session.query(UserModel).filter(
+        UserModel.email == reset_data.email
+    ).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    # Check if user status is RESET_REQUIRED
+    if user.status != UserStatus.RESET_REQUIRED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset not required for this user",
+        )
+    
+    # Verify temp password
+    if not verify_password(reset_data.temp_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid temporary password",
+        )
+    
+    # Update user with new password and set status to ACTIVE
+    user.hashed_password = get_password_hash(reset_data.new_password)
+    user.status = UserStatus.ACTIVE
+    
+    # Commit the changes
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    # Generate access token for auto-login
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        user.id,
+        expires_delta=access_token_expires
+    )
+    
+    return PasswordResetResponse(
+        message="Password reset successful. You are now logged in.",
+        access_token=access_token,
+        token_type="bearer",
+        user=User.model_validate(user)
+    )
+    
 
