@@ -42,23 +42,27 @@ def check_user_status(user: UserModel) -> None:
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            detail="User not found",
+            headers={"X-Reset-Required": "true"}
         )
     
     if user.status == UserStatus.DISABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account has been disabled. Please contact support for assistance."
+            detail="Your account has been disabled. Please contact support for assistance.",
+            headers={"X-Reset-Required": "true"}
         )
     elif user.status == UserStatus.RESET_REQUIRED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Password reset required. Please reset your password before continuing."
+            detail="Password reset required. Please reset your password before continuing.",
+            headers={"X-Reset-Required": "true"}
         )
     elif user.status != UserStatus.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account is not active. Please verify your account or contact support."
+            detail="Your account is not active. Please verify your account or contact support.",
+            headers={"X-Reset-Required": "true"}
         )
 
 

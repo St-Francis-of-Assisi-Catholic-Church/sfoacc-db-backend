@@ -22,23 +22,6 @@ def custom_generate_unique_id(route: APIRoute) -> str:
     tag = route.tags[0] if route.tags else "default"
     return f"{tag}-{route.name}"
 
-def make_json_safe(obj):
-    """Recursively convert objects to JSON-safe format"""
-    if isinstance(obj, dict):
-        return {k: make_json_safe(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [make_json_safe(item) for item in obj]
-    elif isinstance(obj, Exception):
-        return str(obj)
-    else:
-        try:
-            # Test if object is JSON serializable
-            import json
-            json.dumps(obj)
-            return obj
-        except (TypeError, ValueError):
-            return str(obj)
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -112,17 +95,13 @@ async def add_process_time_header(request: Request, call_next: Callable):
 # Custom exception handler for validation errors
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Enhanced validation error handling with proper JSON serialization"""
+    """Enhanced validation error handling with logging"""
     logger.error(f"Validation error: {exc.errors()}")
-    
-    # Make errors JSON-safe
-    safe_errors = make_json_safe(exc.errors())
-    
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": "Validation Error",
-            "errors": safe_errors
+            "errors": exc.errors()
         }
     )
 
