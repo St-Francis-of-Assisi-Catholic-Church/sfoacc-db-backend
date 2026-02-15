@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     # API Settings
     API_V1_STR: str = "/api/v1"
+    VERSION: str = "1.0.0"
     PROJECT_NAME: str
     DOMAIN: str
     BACKEND_HOST: str
