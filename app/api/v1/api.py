@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.routes import auth, health, users, statistics
+from app.api.v1.routes import auth, health, users, statistics, db_dump
 from app.api.v1.routes.parishioner_routes import parishioners
 from app.api.v1.routes import society
 from app.api.v1.routes import sacrament
@@ -27,6 +27,7 @@ api_router.include_router(statistics.router, prefix="/statistics", tags=["statis
 api_router.include_router(uploads.router,  prefix="/uploads", tags=["Uploads"] )
 
 api_router.include_router(bulk_message.router, prefix="/bulk-message", tags=["Bulk Messaging"])
+api_router.include_router(db_dump.router, prefix="/db-dump", tags=["Database"])
 
 
 
