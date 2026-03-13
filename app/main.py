@@ -1,79 +1,54 @@
-from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 import logging
 import time
-from typing import Callable
 from contextlib import asynccontextmanager
+from typing import Callable
+
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.core.database import db
-from app.core.exemptions_handler import general_exception_handler, http_exception_handler
+from app.core.exceptions import (
+    general_exception_handler,
+    http_exception_handler,
+    make_json_safe,
+)
+from app.middleware.logger import setup_logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 logger = logging.getLogger(__name__)
 
+
 def custom_generate_unique_id(route: APIRoute) -> str:
-    """Generate unique ID for API routes"""
     tag = route.tags[0] if route.tags else "default"
     return f"{tag}-{route.name}"
 
-def make_json_safe(obj):
-    """Recursively convert objects to JSON-safe format"""
-    if isinstance(obj, dict):
-        return {k: make_json_safe(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [make_json_safe(item) for item in obj]
-    elif isinstance(obj, Exception):
-        return str(obj)
-    else:
-        try:
-            # Test if object is JSON serializable
-            import json
-            json.dumps(obj)
-            return obj
-        except (TypeError, ValueError):
-            return str(obj)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Handle startup and shutdown events for the application
-    This replaces the @app.on_event("startup") and @app.on_event("shutdown") decorators
-    """
-    try:
-        # Startup
-        logger.info("Starting up application...")
-        
-        # Initialize database
-        db.init_app()
-        
-        # Check database connection
-        if await db.check_connection():
-            logger.info("Successfully connected to database")
-        else:
-            logger.error("Failed to connect to database")
-            raise Exception("Database connection failed")
-        
-        # Log startup information
-        logger.info(f"Environment: {settings.ENVIRONMENT}")
-        logger.info(f"API Version 1 path: {settings.API_V1_STR}")
-        logger.info(f"Backend CORS origins: {settings.BACKEND_CORS_ORIGINS}")
-        
-        yield  # Server is running
-        
-        # Shutdown
-        logger.info("Shutting down application...")
-        db.dispose()  # Clean up database connections
-        logger.info("Application shutdown complete")
-        
-    except Exception as e:
-        logger.error(f"Application lifecycle error: {str(e)}")
-        raise
+    logger.info("Starting up application...")
+    db.init_app()
+
+    if await db.check_connection():
+        logger.info("Successfully connected to database")
+    else:
+        logger.error("Failed to connect to database")
+        raise RuntimeError("Database connection failed")
+
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"API Version 1 path: {settings.API_V1_STR}")
+    logger.info(f"Backend CORS origins: {settings.BACKEND_CORS_ORIGINS}")
+
+    yield
+
+    logger.info("Shutting down application...")
+    db.dispose()
+    logger.info("Application shutdown complete")
 
 
 app = FastAPI(
@@ -82,55 +57,41 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
     redoc_url=f"{settings.API_V1_STR}/redoc",
-    lifespan=lifespan,  # Use the lifespan context manager
+    lifespan=lifespan,
 )
 
 
-# Middleware for request timing and logging
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next: Callable):
-    """Add processing time to response header and log request details"""
     start_time = time.time()
-    
-    # Log request
-    logger.info(f"Request: {request.method} {request.url}")
-    
     try:
         response = await call_next(request)
         process_time = time.time() - start_time
         response.headers["X-Process-Time"] = str(process_time)
-        
-        # Log response
         logger.info(f"Response: {response.status_code} - Process Time: {process_time:.4f}s")
         return response
     except Exception as e:
-        logger.error(f"Request failed: {str(e)}")
-        process_time = time.time() - start_time
-        logger.info(f"Error Response - Process Time: {process_time:.4f}s")
+        logger.error(f"Request failed: {str(e)}", exc_info=True)
         raise
 
-# Custom exception handler for validation errors
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Enhanced validation error handling with proper JSON serialization"""
     logger.error(f"Validation error: {exc.errors()}")
-    
-    # Make errors JSON-safe
-    safe_errors = make_json_safe(exc.errors())
-    
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": "Validation Error",
-            "errors": safe_errors
-        }
+            "errors": make_json_safe(exc.errors()),
+        },
     )
 
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(HTTPException, http_exception_handler)  
+
+app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
-# Set all CORS enabled origins
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 if settings.all_cors_origins:
     app.add_middleware(
         CORSMiddleware,
@@ -140,19 +101,15 @@ if settings.all_cors_origins:
         allow_headers=["*"],
     )
 
-# API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Root endpoint
+
 @app.get("/", tags=["root"])
 async def root():
-    """
-    Root endpoint providing API information and documentation links.
-    """
     return {
         "message": "Welcome to St Francis Church Management System API",
-        "version": settings.VERSION,  # Add version if available in settings
+        "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
         "docs": f"{settings.API_V1_STR}/docs",
-        "redoc": f"{settings.API_V1_STR}/redoc"
+        "redoc": f"{settings.API_V1_STR}/redoc",
     }

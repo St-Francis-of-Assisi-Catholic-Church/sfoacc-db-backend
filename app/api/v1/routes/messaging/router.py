@@ -6,7 +6,7 @@ from pydantic import validator
 from app.schemas.bulk_message import BulkMessageIn
 from app.schemas.common import APIResponse
 from app.services.sms.service import sms_service
-from app.services.email.service2 import email_service
+from app.services.email.service import email_service
 from app.models.parishioner import Parishioner
 from app.api.deps import SessionDep
 from app.core.config import settings

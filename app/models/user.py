@@ -1,18 +1,21 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
-from sqlalchemy import UUID, Boolean, Column, DateTime, Integer, String, Enum, func, text, event
+from sqlalchemy import UUID, Column, DateTime, String, Enum, func, event
 import enum
 from app.core.database import Base
+
 
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     USER = "user"
 
+
 class UserStatus(str, enum.Enum):
     ACTIVE = "active"
     DISABLED = "disabled"
     RESET_REQUIRED = "reset_required"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -25,26 +28,26 @@ class User(Base):
     status = Column(
         Enum(UserStatus),
         nullable=False,
-        default=UserStatus.RESET_REQUIRED.value,  # New users need to reset their password
+        default=UserStatus.RESET_REQUIRED.value,
     )
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
-        server_default=func.now()
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
     )
     updated_at = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
-        onupdate=datetime.utcnow
+        onupdate=lambda: datetime.now(timezone.utc),
     )
-
 
     def __repr__(self):
         return f"<User {self.email}>"
-    
-@event.listens_for(User, 'before_update')
+
+
+@event.listens_for(User, "before_update")
 def receive_before_update(mapper, connection, target):
-    target.updated_at = datetime.utcnow()
+    target.updated_at = datetime.now(timezone.utc)

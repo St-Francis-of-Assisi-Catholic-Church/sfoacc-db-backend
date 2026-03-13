@@ -1,6 +1,8 @@
+import time
+from collections import defaultdict
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -12,24 +14,46 @@ from app.schemas.user import LoginResponse, PasswordResetRequest, PasswordResetR
 from app.models.user import User as UserModel, UserStatus
 
 router = APIRouter()
-    
+
+# Simple in-memory rate limiter: ip -> [timestamp, ...]
+_login_attempts: dict = defaultdict(list)
+_RATE_LIMIT_WINDOW = 60   # seconds
+_RATE_LIMIT_MAX = 10      # max attempts per window per IP
+
+
+def _check_rate_limit(ip: str) -> None:
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW
+    attempts = [t for t in _login_attempts[ip] if t > window_start]
+    _login_attempts[ip] = attempts
+    if len(attempts) >= _RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later.",
+        )
+    _login_attempts[ip].append(now)
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
+    request: Request,
     session: SessionDep,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
     user = session.query(UserModel).filter(
         UserModel.email == form_data.username
     ).first()
-    
+
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
-            #  headers={"WWW-Authenticate": "Bearer"},
         )
     
     # Check user status using centralized function

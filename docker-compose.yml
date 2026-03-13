@@ -47,10 +47,9 @@ services:
         [
           "CMD",
           "wget",
-          "--no-check-certificate",
           "-q",
           "--spider",
-          "https://localhost:8080",
+          "http://localhost:8080",
         ]
       interval: 10s
       timeout: 5s
@@ -87,10 +86,9 @@ services:
         [
           "CMD",
           "wget",
-          "--no-check-certificate",
           "-q",
           "--spider",
-          "https://localhost:8081/health",
+          "http://localhost:8081/health",
         ]
       interval: 10s
       timeout: 5s
@@ -132,9 +130,8 @@ services:
         [
           "CMD",
           "curl",
-          "--insecure",
           "-f",
-          "https://localhost:8000/api/v1/health",
+          "http://localhost:8000/api/v1/health",
         ]
       interval: 10s
       timeout: 5s

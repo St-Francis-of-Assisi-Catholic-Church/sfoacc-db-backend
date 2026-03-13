@@ -1,11 +1,13 @@
 import logging
-import requests
+import httpx
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from app.core.config import settings
 
 # Set up logger
 logger = logging.getLogger("sms_service")
+
+_SMS_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 class SMSTemplate(BaseModel):
     name: str
@@ -18,9 +20,9 @@ class SMSService:
             "api-key": settings.ARKESEL_API_KEY,
             "Content-Type": "application/json"
         }
-        self.client = requests.Session()
+        self.client = httpx.Client(timeout=_SMS_TIMEOUT)
         self.templates = self._initialize_templates()
-        logger.info("SMS Service initialized with API key: %s...", settings.ARKESEL_API_KEY[:5] if settings.ARKESEL_API_KEY else "None")
+        logger.info("SMS Service initialized")
     
     
     def _initialize_templates(self) -> Dict[str, SMSTemplate]:
@@ -112,13 +114,14 @@ class SMSService:
         try:
             response = self.client.post(self.base_url, headers=self.headers, json=payload)
             response.raise_for_status()
-            logger.info("SMS Response", response.json())
+            logger.info("SMS sent to %d recipients", len(formatted_numbers))
             return {
-                "success": True, 
+                "success": True,
                 "data": response.json(),
                 "recipients_count": len(formatted_numbers)
             }
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
+            logger.error("SMS sending failed: %s", str(e))
             return {
                 "success": False,
                 "message": f"SMS sending failed: {str(e)}",

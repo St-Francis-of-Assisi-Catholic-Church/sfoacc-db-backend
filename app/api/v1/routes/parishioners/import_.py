@@ -10,8 +10,9 @@ import re
 from typing import List, Dict, Any, Optional
 
 from app.api.deps import SessionDep, CurrentUser
+from app.core.config import settings
 from app.models.user import UserRole
-from app.services.parishioner_file_import import ParishionerImportService
+from app.services.parishioner.import_ import ParishionerImportService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -636,9 +637,15 @@ async def upload_parishioners_csv(
             detail="Only CSV, TSV or TXT files are allowed"
         )
     
-    # Read file content
+    # Read file content with size guard
     content = await file.read()
-    
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum size is {settings.MAX_UPLOAD_SIZE_MB}MB.",
+        )
+
     try:
         # # Detect the delimiter based on file content
         # string_io = StringIO(content.decode('utf-8'))

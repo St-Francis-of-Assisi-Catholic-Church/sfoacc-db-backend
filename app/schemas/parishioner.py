@@ -342,8 +342,8 @@ class ParishionerPartialUpdate(BaseModel):
     church_community_id: Optional[str] = None
     current_residence: Optional[str] = None
 
-    membership_status: Optional[MembershipStatus] = MembershipStatus.ACTIVE 
-    verification_status: Optional[VerificationStatus] = VerificationStatus.UNVERIFIED 
+    membership_status: Optional[MembershipStatus] = None
+    verification_status: Optional[VerificationStatus] = None
 
 
 class ParishionerRead(ParishionerBase):

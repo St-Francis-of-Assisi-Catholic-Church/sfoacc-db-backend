@@ -32,6 +32,26 @@ class ParishionerImportService:
         if not value:
             return ""
         return str(value).strip().lower()
+
+    def normalize_multiitem_list(self, input_str: str) -> str:
+        """
+        Normalizes a multi-item string list by replacing various delimiters
+        (like ', and ', ' and ', ',') with a semicolon (;).
+
+        Args:
+            input_str (str): The original string containing multiple items.
+
+        Returns:
+            str: A string where all item separators are semicolons.
+        """
+        if not input_str:
+            return ""
+        input_str = str(input_str)
+        input_str = input_str.replace(', and ', ';')
+        input_str = input_str.replace(' and ', ';')
+        input_str = input_str.replace(',', ';')
+        return input_str
+
     
     def check_for_duplicate(self, first_name: str, last_name: str, 
                           other_names: str = None, date_of_birth: datetime.date = None,
@@ -159,7 +179,7 @@ class ParishionerImportService:
         
         if matches:
             closest_name = matches[0]
-            logger.info(f"Found closest match for '{search_name}': '{closest_name}'")
+            # logger.info(f"Found closest match for '{search_name}': '{closest_name}'")
             return entity_dict[closest_name]
         
         return None
@@ -181,7 +201,7 @@ class ParishionerImportService:
                         continue
             # If all formats failed, return None
             return None
-        except:
+        except Exception:
             return None
 
     def clean_text(self, text) -> Optional[str]:
@@ -274,11 +294,11 @@ class ParishionerImportService:
         - Last name initial
         - Day of birth (2 digits)
         - Month of birth (2 digits)
-        - Old church ID (padded to 4 digits)
-        
-        Example: Kofi Nkrumah, born on May 2, 2000, with old ID of 8 
-                 would get: KN0205-0008
-                 
+        - Old church ID (padded to 5 digits)
+
+        Example: Kofi Nkrumah, born on May 2, 2000, with old ID of 8
+                 would get: KN0205-00008
+
         If no old_church_id is provided, return None (don't generate a new ID)
         """
         # If no old_church_id, don't generate new ID
@@ -333,7 +353,9 @@ class ParishionerImportService:
         """Process sacraments string and create sacrament records"""
         if pd.isna(sacraments_str) or not sacraments_str:
             return
-            
+        
+        sacraments_str = self.normalize_multiitem_list(sacraments_str)
+
         # Split by semicolon
         sacraments_list = [s.strip() for s in str(sacraments_str).split(';') if s.strip()]
         
@@ -364,39 +386,231 @@ class ParishionerImportService:
                     logger.warning(f"Sacrament '{sacrament_type}' not found in database and no close match found")
 
     def process_societies(self, parishioner_id: int, societies_str: str):
-        """Process societies string and create society relationships"""
+        """Process societies string and create society relationships with improved mapping"""
         if societies_str is None or not societies_str.strip():
             return
             
+        # Normalize the societies string
+        societies_str = self.normalize_multiitem_list(societies_str)
+
         # Split by semicolon
         societies_list = [s.strip() for s in str(societies_str).split(';') if s.strip()]
+        
+        # Society mapping dictionary for common variations
+        society_mappings = {
+            # Catholic Charismatic Renewal variations
+            'catholic charismatic renewal': 'Catholic Charismatic Renewal (CCR)',
+            'christian charismatic renewal': 'Catholic Charismatic Renewal (CCR)',
+            'ccr': 'Catholic Charismatic Renewal (CCR)',
+            'charismatic renewal': 'Catholic Charismatic Renewal (CCR)',
+            
+            # CYO variations
+            'cyo': 'Catholic Youth Organization (CYO)',
+            'catholic youth organization': 'Catholic Youth Organization (CYO)',
+            
+            # CASU variations
+            'casu': 'Catholic Students Union (CASU)',
+            'catholic students union': 'Catholic Students Union (CASU)',
+            
+            # KSJI variations (all map to same society)
+            'ksji': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'st john\'s international': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'st john s international': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'knights of st john': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'knights of saint john s international': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            'st joseph ladies auxiliary 722 ksji': 'Knights of Saint John\'s International and Ladies Auxiliary (KSJI)',
+            
+            # KNOLTA variations
+            'knolta': 'Knights and Ladies of the Alter (KNOLTA)',
+            'knights and ladies of the altar': 'Knights and Ladies of the Alter (KNOLTA)',
+            'knights and ladies of the alter': 'Knights and Ladies of the Alter (KNOLTA)',
+            'assisi knolta': 'Knights and Ladies of the Alter (KNOLTA)',
+            
+            # Lectors variations
+            'lectors': 'Lectors Ministry',
+            'lectors ministry': 'Lectors Ministry',
+            'lector': 'Lectors Ministry',
+            
+            # Christian Daughters variations
+            'christian daughters': 'Christian Daughters Association',
+            'christian daughters association': 'Christian Daughters Association',
+            'christian daughter': 'Christian Daughters Association',
+            'christian daugthers': 'Christian Daughters Association',
+            'cda': 'Christian Daughters Association',
+            
+            # Christian Mothers variations
+            'christian mothers association': 'Christian Mothers Association',
+            'christian mothers': 'Christian Mothers Association',
+            'christian mother': 'Christian Mothers Association',
+            'christain mothers': 'Christian Mothers Association',
+            
+            # St. Cecilia variations
+            'st cecilia': 'St. Cecilia Ewe Society',
+            'st cecilia ewe society': 'St. Cecilia Ewe Society',
+            'st ceclia': 'St. Cecilia Ewe Society',
+            
+            # Akan Society variations
+            'akan society': 'Holy Family Akan Society',
+            'akan': 'Holy Family Akan Society',
+            'holy family akan society': 'Holy Family Akan Society',
+            'holy family': 'Holy Family Akan Society',
+            'holy family akan group': 'Holy Family Akan Society',
+            'akan group': 'Holy Family Akan Society',
+            
+            # Legion of Mary
+            'legion of mary': 'Legion of Mary',
+            'legion': 'Legion of Mary',
+            
+            # Sacred Heart variations
+            'sacred heart of jesus': 'Sacred Heart of Jesus Confraternity',
+            'sacred heart': 'Sacred Heart of Jesus Confraternity',
+            'scared heart': 'Sacred Heart of Jesus Confraternity',
+            
+            # Tarcisians variations
+            'tarcisian': 'League of Tarcisians',
+            'tarsician': 'League of Tarcisians',
+            'league of tarcisians': 'League of Tarcisians',
+            
+            # Usher variations
+            'usher': 'Usher Group',
+            'usher group': 'Usher Group',
+            'ushering ministry': 'Usher Group',
+            
+            # St. Theresa variations
+            'st theresa of the child jesus': 'St. Theresa of Child Jesus',
+            'st theresa of child jesus': 'St. Theresa of Child Jesus',
+            'st theresa': 'St. Theresa of Child Jesus',
+            'st theresa of the child jesush': 'St. Theresa of Child Jesus',
+            'st theresa of the child jeus': 'St. Theresa of Child Jesus',
+            
+            # Media Team
+            'media team': 'St. Francis of Assisi (SFACC) Media Team',
+            
+            # Ga-Dangme variations
+            'st gabriel ga dangme guild': 'St Gabriel Ga-Dangme Guild',
+            'ga dangbe society': 'St Gabriel Ga-Dangme Guild',
+            'ga dangme society': 'St Gabriel Ga-Dangme Guild',
+            'ga dangme': 'St Gabriel Ga-Dangme Guild',
+            'ga dangbe': 'St Gabriel Ga-Dangme Guild',
+            'ga adangme': 'St Gabriel Ga-Dangme Guild',
+            'ga adamgbe': 'St Gabriel Ga-Dangme Guild',
+            
+            # Choir variations
+            'main choir': 'St. Francis of Assisi Main Choir',
+            'st francis of assisi main choir': 'St. Francis of Assisi Main Choir',
+            'choir': 'St. Francis of Assisi Main Choir',
+            'church choir': 'St. Francis of Assisi Main Choir',
+            'st francis of assisi of assisi main choir': 'St. Francis of Assisi Main Choir',
+            
+            # Northern Union
+            'northern union': 'Northern Union',
+            'northen union': 'Northern Union',
+            'st francis northern union': 'Northern Union',
+            
+            # St. Vincent de Paul
+            'st vincent de paul': 'St. Vincent de Paul',
+            'st vincent': 'St. Vincent de Paul',
+            'st vincent depaul': 'St. Vincent de Paul',
+            
+            # Nigeria Community
+            'nigeria community': 'Nigeria Community',
+            
+            # Knights and Ladies of Marshall variations
+            'knights and ladies of marshall': 'Knights and Ladies of Mashall',
+            'knights of marshall': 'Knights and Ladies of Mashall',
+            'knight and ladies of marshall': 'Knights and Ladies of Mashall',
+            'marshallan association': 'Knights and Ladies of Mashall',
+            'marshallan': 'Knights and Ladies of Mashall',
+            'mashallan association': 'Knights and Ladies of Mashall',
+            'marshallans': 'Knights and Ladies of Mashall',
+            'knights and ladies of mashallan': 'Knights and Ladies of Mashall',
+            'ladies of marshall': 'Knights and Ladies of Mashall',
+            'ladies of marshallan': 'Knights and Ladies of Mashall',
+            'ladies of mashallan': 'Knights and Ladies of Mashall',
+            'noble order of ladies of marshall': 'Knights and Ladies of Mashall',
+            
+            # New societies that should be added to DB (map to exact names)
+            'trinity choir': 'Trinity Choir',
+            'ycw': 'Young Christian Workers (YCW)',
+            'catholic women council': 'Catholic Women Council',
+            'catholic women': 'Catholic Women Council',
+            'st anthony guild': 'St. Anthony Guild',
+            'st anthony s guild': 'St. Anthony Guild',
+            'catholic association of media practioners': 'Catholic Association of Media Practitioners',
+            'friday borns': 'Friday Borns Association',
+            'friday day borns group': 'Friday Borns Association',
+            'mass servant': 'Mass Servers Guild',
+            'mass server': 'Mass Servers Guild',
+            'mass server aspirant': 'Mass Servers Guild',
+            'mass severs': 'Mass Servers Guild',
+            'catechist': 'Catechists Association',
+            'eucharistic minister': 'Eucharistic Ministers',
+            'eucharist minister': 'Eucharistic Ministers',
+            'drama team': 'Drama Ministry',
+            'drama': 'Drama Ministry',
+            'welfare': 'Parish Welfare Committee',
+            'sunday school': 'Sunday School Ministry',
+            'youth choir': 'Youth Choir',
+            'singing ministry': 'Youth Choir',
+            'women fellowship': 'Women\'s Fellowship',
+            'christian sons': 'Christian Men\'s Fellowship',
+            'st michael ewe society': 'St. Michael Ewe Society',
+            'st micheal ewe society': 'St. Michael Ewe Society',
+            'st paul dagaaba society': 'St. Paul Dagaaba Society',
+            'francophone community': 'Francophone Community',
+            'care givers group': 'Care Givers Ministry',
+            'care giver': 'Care Givers Ministry',
+            'secretarial team': 'Parish Secretariat',
+            'thursday born': 'Thursday Borns Association',
+            'sunday borns': 'Sunday Borns Association'
+        }
+        
+        def normalize_society_name(name):
+            """Normalize society name for matching"""
+            return name.lower().strip().replace('.', '').replace(',', '').replace('  ', ' ')
         
         for society_name in societies_list:
             society_name = self.clean_text(society_name)
             
             if society_name:
-                # Try to find the society by exact name first
-                society = self.db.query(Society).filter(
-                    Society.name == society_name
-                ).first()
+                normalized_name = normalize_society_name(society_name)
                 
-                # If not found, try fuzzy matching
+                # First, try direct mapping
+                mapped_name = society_mappings.get(normalized_name)
+                society = None
+                
+                if mapped_name:
+                    # Look for the mapped name in database
+                    society = self.db.query(Society).filter(
+                        Society.name == mapped_name
+                    ).first()
+                    
+                    if society:
+                        logger.info(f"Found mapped society '{society.name}' for input '{society_name}'")
+                    else:
+                        logger.warning(f"Mapped society '{mapped_name}' not found in database for input '{society_name}'")
+                
+                # If no direct mapping or mapped society not found, try exact match
                 if not society:
-                    # Get all societies from the database
+                    society = self.db.query(Society).filter(
+                        Society.name == society_name
+                    ).first()
+                
+                # If still not found, try fuzzy matching
+                if not society:
                     all_societies = self.db.query(Society).all()
                     
                     if all_societies:
-                        # Create a mapping of society names to society objects
                         society_names = []
                         society_dict = {}
                         
                         for soc in all_societies:
-                            soc_name = soc.name.lower().strip()
+                            soc_name = normalize_society_name(soc.name)
                             society_names.append(soc_name)
                             society_dict[soc_name] = soc
                         
                         # Find the closest match
-                        matches = get_close_matches(society_name.lower(), society_names, n=1, cutoff=0.6)
+                        matches = get_close_matches(normalized_name, society_names, n=1, cutoff=0.6)
                         
                         if matches:
                             closest_name = matches[0]
@@ -407,26 +621,36 @@ class ParishionerImportService:
                     # Add relationship between parishioner and society
                     parishioner = self.db.query(Parishioner).get(parishioner_id)
                     if parishioner:
-                        # Check if the relationship already exists
-                        existing_membership = self.db.execute(
-                            society_members.select().where(
+                        try:
+                            # FIXED: Use a safer approach to check for existing membership
+                            # Use count instead of fetchone to avoid the interface error
+                            existing_count = self.db.query(society_members).filter(
                                 society_members.c.society_id == society.id,
                                 society_members.c.parishioner_id == parishioner.id
-                            )
-                        ).fetchone()
-                        
-                        if not existing_membership:
-                            # Add to society members - don't set join_date
-                            self.db.execute(
-                                society_members.insert().values(
-                                    society_id=society.id,
-                                    parishioner_id=parishioner.id,
-                                    membership_status=MembershipStatus.ACTIVE
+                            ).count()
+                            
+                            if existing_count == 0:
+                                # Add to society members
+                                self.db.execute(
+                                    society_members.insert().values(
+                                        society_id=society.id,
+                                        parishioner_id=parishioner.id,
+                                        membership_status=MembershipStatus.ACTIVE
+                                    )
                                 )
-                            )
-                            logger.info(f"Added parishioner {parishioner.id} to society '{society.name}'")
+                                logger.info(f"Added parishioner {parishioner.id} to society '{society.name}'")
+                            else:
+                                logger.debug(f"Parishioner {parishioner.id} already member of '{society.name}'")
+                                
+                        except Exception as e:
+                            logger.error(f"Error checking/adding society membership for '{society_name}': {str(e)}")
+                            # Continue processing other societies instead of failing completely
+                            continue
+                            
                 else:
                     logger.warning(f"Society '{society_name}' not found in database and no close match found")
+
+
 
     def process_languages(self, parishioner_id: int, languages_str: str):
         """Process languages string with better delimiter handling"""
@@ -434,10 +658,8 @@ class ParishionerImportService:
             return
         
         # Handle various delimiters (comma, 'and', semicolon)
-        languages_str = languages_str.replace(', and ', ';')
-        languages_str = languages_str.replace(' and ', ';')
-        languages_str = languages_str.replace(',', ';')
-        
+        languages_str = self.normalize_multiitem_list(languages_str)
+
         # Split by semicolon
         languages_list = [l.strip() for l in languages_str.split(';') if l.strip()]
         
@@ -462,10 +684,8 @@ class ParishionerImportService:
             return
         
         # Handle various delimiters (comma, 'and', semicolon)
-        skills_str = skills_str.replace(', and ', ';')
-        skills_str = skills_str.replace(' and ', ';')
-        skills_str = skills_str.replace(',', ';')
-        
+        skills_str = self.normalize_multiitem_list(skills_str)
+
         # Split by semicolon
         skills_list = [s.strip() for s in skills_str.split(';') if s.strip()]
         
@@ -486,33 +706,31 @@ class ParishionerImportService:
 
 
     def process_row(self, row: pd.Series, row_number: int) -> Dict[str, Any]:
-        """Process a single row of CSV data"""
+        """
+        Process a single row of CSV data using sanitized column names
+        """
         try:
             # Parse the date of birth (should be validated already)
-            date_of_birth = self.parse_date(row.get("Date of Birth", ""))
-            # if date_of_birth is None:
-            #     # return {"success": False, "error": f"Invalid date format for Date of Birth: {row.get('Date of Birth', '')}"}
-            #     pass
+            date_of_birth = self.parse_date(row.get("date_of_birth", ""))
             
-            # Check required fields
+            # Check required fields using sanitized names
             required_fields = {
-                "Last Name (Surname)": row.get("Last Name (Surname)", ""),
-                "First Name": row.get("First Name", ""),
-                "Gender": row.get("Gender", "")
+                "last_name": row.get("last_name", ""),
+                "first_name": row.get("first_name", ""),
+                "gender": row.get("gender", "")
             }
             
             for field, value in required_fields.items():
                 if pd.isna(value) or not str(value).strip():
                     return {"success": False, "error": f"Missing required field: {field}"}
                 
-            
             # Clean the key fields for duplicate checking
-            first_name = self.clean_text(row["First Name"])
-            last_name = self.clean_text(row["Last Name (Surname)"])
-            other_names = self.clean_text(row.get("Other Names", ""))
-            date_of_birth = self.parse_date(row.get("Date of Birth", ""))
-            gender = self.map_gender(row.get("Gender", ""))
-            place_of_birth = self.clean_text(row.get("Place of Birth", ""))
+            first_name = self.clean_text(row["first_name"])
+            last_name = self.clean_text(row["last_name"])
+            other_names = self.clean_text(row.get("other_names", ""))
+            date_of_birth = self.parse_date(row.get("date_of_birth", ""))
+            gender = self.map_gender(row.get("gender", ""))
+            place_of_birth = self.clean_text(row.get("place_of_birth", ""))
             
             # Check for duplicates BEFORE creating the parishioner
             existing_parishioner = self.check_for_duplicate(
@@ -531,9 +749,9 @@ class ParishionerImportService:
                     "error": f"Duplicate parishioner found. Existing record: {duplicate_info}",
                     "duplicate": True
                 }
-         
+        
             # Get old church ID
-            old_church_id = self.clean_numeric_id(row.get("Unique ID ", ""))
+            old_church_id = self.clean_numeric_id(row.get("unique_id", ""))
             
             # Check if a parishioner with the same old_church_id already exists
             if old_church_id:
@@ -552,17 +770,16 @@ class ParishionerImportService:
             new_church_id = None
             if old_church_id:
                 new_church_id = self.generate_church_id(
-                    first_name=self.clean_text(row["First Name"]), 
-                    last_name=self.clean_text(row["Last Name (Surname)"]),
+                    first_name=self.clean_text(row["first_name"]), 
+                    last_name=self.clean_text(row["last_name"]),
                     date_of_birth=date_of_birth,
                     old_church_id=old_church_id
                 )
             
-            # Handle place of worship - check if column exists and uses proper name
+            # Handle place of worship
             place_of_worship_id = None
-            place_of_worship_col = next((col for col in ["Place of Worship", "Place Worship"] if col in row and not pd.isna(row[col])), None)
-            if place_of_worship_col:
-                place_name = self.clean_text(row[place_of_worship_col])
+            if "place_worship" in row and not pd.isna(row["place_worship"]):
+                place_name = self.clean_text(row["place_worship"])
                 if place_name:
                     # Try to find the place of worship by exact name first
                     place_of_worship = self.db.query(PlaceOfWorship).filter(
@@ -582,11 +799,10 @@ class ParishionerImportService:
                         # If it doesn't exist, log a warning
                         logger.warning(f"Place of worship '{place_name}' not found in database and no close match found")
 
-
-            # Handle church community - check if column exists
+            # Handle church community
             church_community_id = None
-            if "Church Community" in row and not pd.isna(row["Church Community"]):
-                community_name = self.clean_text(row["Church Community"])
+            if "church_community" in row and not pd.isna(row["church_community"]):
+                community_name = self.clean_text(row["church_community"])
                 if community_name:
                     # Try to find the church community by exact name first
                     church_community = self.db.query(ChurchCommunity).filter(
@@ -605,86 +821,66 @@ class ParishionerImportService:
                     else:
                         # If it doesn't exist, log a warning
                         logger.warning(f"Church community '{community_name}' not found in database and no close match found")
-                
             
-                
-            
-            # Create Parishioner
+            # Create Parishioner using sanitized column names
             parishioner = Parishioner(
                 new_church_id=new_church_id,
                 old_church_id=old_church_id,
-                first_name=self.clean_text(row["First Name"]),
-                other_names=self.clean_text(row.get("Other Names", "")),
-                last_name=self.clean_text(row["Last Name (Surname)"]),
-                maiden_name=self.clean_text(row.get("Maiden Name", "")),
-                gender=self.map_gender(row.get("Gender", "")),
+                first_name=self.clean_text(row["first_name"]),
+                other_names=self.clean_text(row.get("other_names", "")),
+                last_name=self.clean_text(row["last_name"]),
+                maiden_name=self.clean_text(row.get("maiden_name", "")),
+                gender=self.map_gender(row.get("gender", "")),
                 date_of_birth=date_of_birth,
-                place_of_birth=self.clean_text(row.get("Place of Birth", "")),
-                hometown=self.clean_text(row.get("Hometown", "")),
-                region=self.clean_text(row.get("Region/State", "")),
-                country=self.clean_text(row.get("Country", "")),
-                marital_status=self.map_marital_status(row.get("Marital Status", "")),
-                mobile_number=self.clean_phone_number(row.get("Mobile Number", "")),
-                whatsapp_number=self.clean_phone_number(row.get("WhatsApp Number", "")),
-                email_address=self.clean_text(row.get("Email Address", "")),
+                place_of_birth=self.clean_text(row.get("place_of_birth", "")),
+                hometown=self.clean_text(row.get("hometown", "")),
+                region=self.clean_text(row.get("region_state", "")),
+                country=self.clean_text(row.get("country", "")),
+                marital_status=self.map_marital_status(row.get("marital_status", "")),
+                mobile_number=self.clean_phone_number(row.get("mobile_number", "")),
+                whatsapp_number=self.clean_phone_number(row.get("whatsapp_number", "")),
+                email_address=self.clean_text(row.get("email_address", "")),
                 membership_status=MembershipStatus.ACTIVE,
                 verification_status=VerificationStatus.UNVERIFIED,
-                current_residence=self.clean_text(row.get("Current place of Residence/Area", "")),
-                place_of_worship_id=place_of_worship_id , # Use the ID instead of the string name
-                church_community_id = church_community_id
+                current_residence=self.clean_text(row.get("current_residence", "")),
+                place_of_worship_id=place_of_worship_id,
+                church_community_id=church_community_id
             )
-
-
 
             # Try to add the parishioner
             try:
                 self.db.add(parishioner)
-                self.db.flush()  # This will trigger the unique constraint check
+                self.db.flush()  # This will trigger the unique constraint check and get the ID
                 
-                # If we get here, no duplicate was found at DB level either
-                # Continue with creating related records (family, occupation, etc.)
-                # ... (add other related record creation here)
-
-
-                 # Create Occupation
-                occupation_col = "Occupation/Profession (Indicate Self-Employed or Not Employed)"
-                employer_col = "Current Workplace/Employer"
+                # Store the ID before any potential session issues
+                parishioner_id = parishioner.id
                 
-                if (occupation_col in row and not pd.isna(row[occupation_col])) or \
-                (employer_col in row and not pd.isna(row[employer_col])):
+                # Create Occupation
+                if ("occupation" in row and not pd.isna(row["occupation"])) or \
+                ("employer" in row and not pd.isna(row["employer"])):
                     occupation = Occupation(
-                        parishioner_id=parishioner.id,
-                        role=self.clean_text(row.get(occupation_col, "")) or "Not specified",
-                        employer=self.clean_text(row.get(employer_col, "")) or "Not specified"
+                        parishioner_id=parishioner_id,
+                        role=self.clean_text(row.get("occupation", "")) or "Not specified",
+                        employer=self.clean_text(row.get("employer", "")) or "Not specified"
                     )
                     self.db.add(occupation)
 
-                
-                # Find spouse name column (both with and without leading space)
-                spouse_name_col = None
-                for col_name in ["Spouse Name", " Spouse Name", "If Married, Full name of Spouse.", "If Married, Full name of Spouse"]:
-                    if col_name in row and not pd.isna(row[col_name]):
-                        spouse_name_col = col_name
-                        break
-
                 # Create FamilyInfo
                 family_info = FamilyInfo(
-                    parishioner_id=parishioner.id,
-                    spouse_name=self.clean_text(row.get(spouse_name_col, "")),
-                    father_name=self.clean_text(row.get("Fathers's Name", "")),
-                    father_status=self.map_parental_status(row.get("Father's Life Status", "")),
-                    mother_name=self.clean_text(row.get("Mother's Name", "")),
-                    mother_status=self.map_parental_status(row.get("Mother's Life Status", ""))
+                    parishioner_id=parishioner_id,
+                    spouse_name=self.clean_text(row.get("spouse_name", "")),
+                    father_name=self.clean_text(row.get("father_name", "")),
+                    father_status=self.map_parental_status(row.get("father_status", "")),
+                    mother_name=self.clean_text(row.get("mother_name", "")),
+                    mother_status=self.map_parental_status(row.get("mother_status", ""))
                 )
                 self.db.add(family_info)
                 self.db.flush()  # Get the ID without committing
 
-
                 # Create Children if any
-                kids_name_col = "Name of Kids (if any)"
-                if kids_name_col in row and not pd.isna(row[kids_name_col]):
-                    kids_str = str(row[kids_name_col])
-                    # Split by semicolon (standardized in preprocessing)
+                if "kids_names" in row and not pd.isna(row["kids_names"]):
+                    kids_str = str(row["kids_names"])
+                    kids_str = self.normalize_multiitem_list(kids_str)
                     kids_list = [k.strip() for k in kids_str.split(';') if k.strip()]
                     
                     for kid_name in kids_list:
@@ -694,67 +890,42 @@ class ParishionerImportService:
                         )
                         self.db.add(child)
 
-                
-                # # Create Emergency Contact
-                # emergency_name_col = "Emergency Contact Name"
-                # emergency_number_col = "Emergency Contact Number"
-                # if (emergency_name_col in row and not pd.isna(row[emergency_name_col])) and \
-                #    (emergency_number_col in row and not pd.isna(row[emergency_number_col])):
-                #     emergency = EmergencyContact(
-                #         parishioner_id=parishioner.id,
-                #         name=self.clean_text(row[emergency_name_col]),
-                #         relationship="Not specified",  # Not in CSV
-                #         primary_phone=self.clean_phone_number(row[emergency_number_col])
-                #     )
-                #     self.db.add(emergency)
-
                 # Create Emergency Contact
-                emergency_name_columns = ["Emergency Contact Name", "In Case of Emergency Call"]
-                emergency_number_columns = ["Emergency Contact Number", "Contact number"]
-
-                # Find which column is present in the row
-                emergency_name_col = next((col for col in emergency_name_columns if col in row and not pd.isna(row[col])), None)
-                emergency_number_col = next((col for col in emergency_number_columns if col in row and not pd.isna(row[col])), None)
-
-                if emergency_name_col and emergency_number_col:
+                if ("emergency_contact_name" in row and not pd.isna(row["emergency_contact_name"])) and \
+                ("emergency_contact_number" in row and not pd.isna(row["emergency_contact_number"])):
                     emergency = EmergencyContact(
-                        parishioner_id=parishioner.id,
-                        name=self.clean_text(row[emergency_name_col]),
+                        parishioner_id=parishioner_id,
+                        name=self.clean_text(row["emergency_contact_name"]),
                         relationship="Not specified",  # Not in CSV
-                        primary_phone=self.clean_phone_number(row[emergency_number_col])
+                        primary_phone=self.clean_phone_number(row["emergency_contact_number"])
                     )
                     self.db.add(emergency)
 
-
-                
-                # Create Medical Condition if any - check both fields
+                # Create Medical Condition if any
                 medical_conditions = None
-                # Check explicit "Medical Conditions" field first
-                if "Medical Conditions" in row and not pd.isna(row["Medical Conditions"]):
-                    medical_conditions = self.clean_text(row["Medical Conditions"])
-                # If not found, check the Yes/No field and its details
-                elif ("Any Medical Condition" in row and not pd.isna(row["Any Medical Condition"]) and 
-                      "yes" in str(row["Any Medical Condition"]).lower()):
-                    if "If Yes, Please State" in row and not pd.isna(row["If Yes, Please State"]):
-                        medical_conditions = self.clean_text(row["If Yes, Please State"])
+                # Check explicit "medical_conditions" field first
+                if "medical_conditions" in row and not pd.isna(row["medical_conditions"]):
+                    medical_conditions = self.clean_text(row["medical_conditions"])
+                # If not found, check the Yes/No field
+                elif ("any_medical_condition" in row and not pd.isna(row["any_medical_condition"]) and 
+                    "yes" in str(row["any_medical_condition"]).lower()):
+                    if "medical_conditions_detail" in row and not pd.isna(row["medical_conditions_detail"]):
+                        medical_conditions = self.clean_text(row["medical_conditions_detail"])
                     else:
-                        medical_conditions = "Medical condition not specified"
+                        medical_conditions = "Medical condition specified but details not provided"
                 
                 # Add the medical condition if found
                 if medical_conditions:
                     medical = MedicalCondition(
-                        parishioner_id=parishioner.id,
+                        parishioner_id=parishioner_id,
                         condition=medical_conditions
                     )
                     self.db.add(medical)
 
-
-                
-                # # Create Skills if any
-                skills_col = "Skills/Talents"
-                if skills_col in row and not pd.isna(row[skills_col]):
-                    skills_str = str(row[skills_col])
-                    # Split by semicolon (standardized in preprocessing)
+                # Create Skills if any
+                if "skills_talents" in row and not pd.isna(row["skills_talents"]):
+                    skills_str = str(row["skills_talents"])
+                    skills_str = self.normalize_multiitem_list(skills_str)
                     skills_list = [s.strip() for s in skills_str.split(';') if s.strip()]
                     
                     for skill_name in skills_list:
@@ -770,10 +941,9 @@ class ParishionerImportService:
                         parishioner.skills_rel.append(skill)
                 
                 # Create Languages if any
-                languages_col = "Languages Spoken"
-                if languages_col in row and not pd.isna(row[languages_col]):
-                    languages_str = str(row[languages_col])
-                    # Split by semicolon (standardized in preprocessing)
+                if "languages_spoken" in row and not pd.isna(row["languages_spoken"]):
+                    languages_str = str(row["languages_spoken"])
+                    languages_str = self.normalize_multiitem_list(languages_str)
                     languages_list = [l.strip() for l in languages_str.split(';') if l.strip()]
                     
                     for language_name in languages_list:
@@ -789,34 +959,23 @@ class ParishionerImportService:
                         parishioner.languages_rel.append(language)
                 
                 # Process church societies if available
-                societies_col = next((col for col in ["Church Groups/Societies"] if col in row and not pd.isna(row[col])), None)
-                if societies_col and not pd.isna(row[societies_col]):
-                    self.process_societies(parishioner.id, row[societies_col])
+                if "church_groups" in row and not pd.isna(row["church_groups"]):
+                    self.process_societies(parishioner_id, row["church_groups"])
                 
                 # Process sacraments
-                sacrament_col = next((col for col in ["Church Sacrements", "Church sacraments", "Church Sacraments", "church sacraments"] if col in row), None)
-                if sacrament_col and not pd.isna(row[sacrament_col]):
-                    self.process_sacraments(parishioner.id, row[sacrament_col])
+                if "church_sacraments" in row and not pd.isna(row["church_sacraments"]):
+                    self.process_sacraments(parishioner_id, row["church_sacraments"])
 
-
-
-
-
-
-
-
-                # finish and commit
-                
+                # Commit the transaction
                 self.db.commit()
                 logger.info(f"Successfully created parishioner: {first_name} {last_name} (Row {row_number})")
-                return {"success": True, "parishioner_id": parishioner.id}
+                return {"success": True, "parishioner_id": parishioner_id}
                 
             except IntegrityError as e:
                 self.db.rollback()
                 error_msg = str(e).lower()
                 
                 if "unique_parishioner" in error_msg or "duplicate" in error_msg:
-                    # This should rarely happen since we check above, but provides safety net
                     return {
                         "success": False, 
                         "error": "Duplicate parishioner detected at database level. A parishioner with the same combination of identifying information already exists.",
@@ -825,151 +984,11 @@ class ParishionerImportService:
                 else:
                     logger.error(f"Database integrity error: {str(e)}")
                     return {"success": False, "error": f"Database error: {str(e)}"}
-
-
-
-            
-            
-            # self.db.add(parishioner)
-            # self.db.flush()  # Get the ID without committing
-            
-            # # Create Occupation
-            # occupation_col = "Occupation/Profession (Indicate Self-Employed or Not Employed)"
-            # employer_col = "Current Workplace / Employer"
-            
-            # if (occupation_col in row and not pd.isna(row[occupation_col])) or \
-            #    (employer_col in row and not pd.isna(row[employer_col])):
-            #     occupation = Occupation(
-            #         parishioner_id=parishioner.id,
-            #         role=self.clean_text(row.get(occupation_col, "")) or "Not specified",
-            #         employer=self.clean_text(row.get(employer_col, "")) or "Not specified"
-            #     )
-            #     self.db.add(occupation)
-            
-            # # Find spouse name column (both with and without leading space)
-            # spouse_name_col = None
-            # for col_name in ["Spouse Name", " Spouse Name"]:
-            #     if col_name in row and not pd.isna(row[col_name]):
-            #         spouse_name_col = col_name
-            #         break
-                    
-            # # Create FamilyInfo
-            # family_info = FamilyInfo(
-            #     parishioner_id=parishioner.id,
-            #     spouse_name=self.clean_text(row.get(spouse_name_col, "")),
-            #     father_name=self.clean_text(row.get("FATHER'S NAME", "")),
-            #     father_status=self.map_parental_status(row.get("Father's Life Status", "")),
-            #     mother_name=self.clean_text(row.get("MOTHER'S NAME", "")),
-            #     mother_status=self.map_parental_status(row.get("Mother's Life Status", ""))
-            # )
-            # self.db.add(family_info)
-            # self.db.flush()  # Get the ID without committing
-            
-            # # Create Children if any
-            # kids_name_col = "Name of Kids (if any)"
-            # if kids_name_col in row and not pd.isna(row[kids_name_col]):
-            #     kids_str = str(row[kids_name_col])
-            #     # Split by semicolon (standardized in preprocessing)
-            #     kids_list = [k.strip() for k in kids_str.split(';') if k.strip()]
                 
-            #     for kid_name in kids_list:
-            #         child = Child(
-            #             family_info_id=family_info.id,
-            #             name=self.clean_text(kid_name)
-            #         )
-            #         self.db.add(child)
-            
-            # # Create Emergency Contact
-            # emergency_name_col = "Emergency Contact Name"
-            # emergency_number_col = "Emergency Contact Number"
-            # if (emergency_name_col in row and not pd.isna(row[emergency_name_col])) and \
-            #    (emergency_number_col in row and not pd.isna(row[emergency_number_col])):
-            #     emergency = EmergencyContact(
-            #         parishioner_id=parishioner.id,
-            #         name=self.clean_text(row[emergency_name_col]),
-            #         relationship="Not specified",  # Not in CSV
-            #         primary_phone=self.clean_phone_number(row[emergency_number_col])
-            #     )
-            #     self.db.add(emergency)
-            
-            # # Create Medical Condition if any - check both fields
-            # medical_conditions = None
-            # # Check explicit "Medical Conditions" field first
-            # if "Medical Conditions" in row and not pd.isna(row["Medical Conditions"]):
-            #     medical_conditions = self.clean_text(row["Medical Conditions"])
-            # # If not found, check the Yes/No field and its details
-            # elif ("Any Medical Condition" in row and not pd.isna(row["Any Medical Condition"]) and 
-            #       "yes" in str(row["Any Medical Condition"]).lower()):
-            #     if "If Yes, Please State" in row and not pd.isna(row["If Yes, Please State"]):
-            #         medical_conditions = self.clean_text(row["If Yes, Please State"])
-            #     else:
-            #         medical_conditions = "Medical condition not specified"
-            
-            # # Add the medical condition if found
-            # if medical_conditions:
-            #     medical = MedicalCondition(
-            #         parishioner_id=parishioner.id,
-            #         condition=medical_conditions
-            #     )
-            #     self.db.add(medical)
-            
-            # # Create Skills if any
-            # skills_col = "Skills/Talents"
-            # if skills_col in row and not pd.isna(row[skills_col]):
-            #     skills_str = str(row[skills_col])
-            #     # Split by semicolon (standardized in preprocessing)
-            #     skills_list = [s.strip() for s in skills_str.split(';') if s.strip()]
-                
-            #     for skill_name in skills_list:
-            #         skill_name = self.clean_text(skill_name)
-            #         # Check if skill exists
-            #         skill = self.db.query(Skill).filter(Skill.name == skill_name).first()
-            #         if not skill:
-            #             skill = Skill(name=skill_name)
-            #             self.db.add(skill)
-            #             self.db.flush()
-                    
-            #         # Add skill to parishioner
-            #         parishioner.skills_rel.append(skill)
-            
-            # # Create Languages if any
-            # languages_col = "Languages Spoken"
-            # if languages_col in row and not pd.isna(row[languages_col]):
-            #     languages_str = str(row[languages_col])
-            #     # Split by semicolon (standardized in preprocessing)
-            #     languages_list = [l.strip() for l in languages_str.split(';') if l.strip()]
-                
-            #     for language_name in languages_list:
-            #         language_name = self.clean_text(language_name)
-            #         # Check if language exists
-            #         language = self.db.query(Language).filter(Language.name == language_name).first()
-            #         if not language:
-            #             language = Language(name=language_name)
-            #             self.db.add(language)
-            #             self.db.flush()
-                    
-            #         # Add language to parishioner
-            #         parishioner.languages_rel.append(language)
-            
-            # # Process church societies if available
-            # societies_col = next((col for col in ["Church Groups/Societies", "Member of Any Church Society / Group"] if col in row and not pd.isna(row[col])), None)
-            # if societies_col and not pd.isna(row[societies_col]):
-            #     self.process_societies(parishioner.id, row[societies_col])
-            
-            # # Process sacraments
-            # sacrament_col = next((col for col in ["Church Sacrements", "Church sacraments"] if col in row), None)
-            # if sacrament_col and not pd.isna(row[sacrament_col]):
-            #     self.process_sacraments(parishioner.id, row[sacrament_col])
-            
-            # self.db.commit()
-            # return {"success": True, "parishioner_id": parishioner.id}
-            
         except Exception as e:
             self.db.rollback()
             logger.error(f"Error processing row: {str(e)}", exc_info=True)
-            return {"success": False, "error": str(e)} 
-        
-        
+            return {"success": False, "error": str(e)}
 
 
     def import_csv(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -985,7 +1004,6 @@ class ParishionerImportService:
 
         logger.info(f"Starting import of {len(df)} records")
         
-        
         for index, row in df.iterrows():
             # Skip completely empty rows
             if row.isna().all():
@@ -994,35 +1012,45 @@ class ParishionerImportService:
                 
             row_number = index + 2  # +2 because Excel/CSV rows start at 1 and we have headers
 
+            try:
+                # Process the row
+                row_result = self.process_row(row, row_number)
+                
+                if row_result["success"]:
+                    result["success"] += 1
+                    if result["success"] % 100 == 0:  # Progress logging
+                        logger.info(f"Processed {result['success']} records successfully...")
+                else:
+                    result["failed"] += 1
+                    error_detail = f"Error processing row {row_number}: {row_result['error']}"
+                    result["errors"].append(error_detail)
 
-            # Process the row
-            row_result = self.process_row(row, row_number)
-            
-            if row_result["success"]:
-                result["success"] += 1
-                if result["success"] % 100 == 0:  # Progress logging
-                    logger.info(f"Processed {result['success']} records successfully...")
-            else:
+                    # Track duplicates separately
+                    if row_result.get("duplicate", False):
+                        result["duplicates"] += 1
+                        result["duplicate_details"].append({
+                            "row": row_number,
+                            "name": f"{row.get('first_name', '')} {row.get('last_name', '')}",
+                            "error": row_result['error']
+                        })
+                        
+            except Exception as e:
+                # Handle any unexpected errors
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass  # Rollback might fail if session is already corrupted
+                    
                 result["failed"] += 1
-                error_detail = f"Error processing row {index+2}: {row_result['error']}"
+                error_detail = f"Unexpected error for row {row_number}: {str(e)}"
                 result["errors"].append(error_detail)
-
+                logger.error(error_detail)
                 
-                # Track duplicates separately
-                if row_result.get("duplicate", False):
-                    result["duplicates"] += 1
-                    result["duplicate_details"].append({
-                        "row": row_number,
-                        "name": f"{row.get('First Name', '')} {row.get('Last Name (Surname)', '')}",
-                        "error": row_result['error']
-                    })
-                
-                
-                # if "duplicate" in row_result and row_result["duplicate"]:
-                #     result["duplicates"] += 1
-
+                # Continue with next row
+                continue
         
         # Log the final results
         logger.info(f"Import completed: {result['success']} successful, {result['failed']} failed, {result['duplicates']} duplicates")
         
         return result
+

@@ -28,18 +28,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     Handle validation errors and return properly formatted JSON responses
     """
     logger.error(f"Validation error: {exc.errors()}")
-    
+
     # Extract error details and make them JSON serializable
     safe_errors = make_json_safe(exc.errors())
-    
+
     response_content = {
         "detail": "Validation error",
         "errors": safe_errors,
         # "timestamp": datetime.utcnow().isoformat()
     }
-    
+
     logger.error(f"Request failed: {response_content}")
-    
+
     return JSONResponse(
         status_code=422,
         content=response_content
@@ -50,7 +50,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     Handle HTTP exceptions
     """
     logger.error(f"HTTP error: {exc.detail}")
-    
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -66,7 +66,7 @@ async def general_exception_handler(request: Request, exc: Exception):
     Handle general exceptions
     """
     logger.error(f"Unexpected error: {str(exc)}", exc_info=True)
-    
+
     return JSONResponse(
         status_code=500,
         content={

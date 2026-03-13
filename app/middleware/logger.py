@@ -58,14 +58,15 @@ class LoggerMiddleware(BaseHTTPMiddleware):
         )
         
         if request_body:
-            # Be careful not to log sensitive data like passwords
+            _SENSITIVE_FIELDS = {"password", "new_password", "temp_password", "old_password", "secret", "token"}
             try:
                 body_dict = json.loads(request_body)
-                if 'password' in body_dict:
-                    body_dict['password'] = '***REDACTED***'
+                for field in _SENSITIVE_FIELDS:
+                    if field in body_dict:
+                        body_dict[field] = "***REDACTED***"
                 logger.debug(f"Request Body [{request_id}]: {json.dumps(body_dict)}")
             except json.JSONDecodeError:
-                logger.debug(f"Request Body [{request_id}]: {request_body[:200]}...")  # Log first 200 chars
+                logger.debug(f"Request Body [{request_id}]: {request_body[:200]}...")
         
         # Process request
         response = await call_next(request)
