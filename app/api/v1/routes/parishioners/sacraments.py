@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import and_
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, is_admin
 from app.models.parishioner import Parishioner, ParishionerSacrament
 from app.models.sacrament import Sacrament, SacramentType
 from app.schemas.common import APIResponse
@@ -111,7 +111,7 @@ async def add_sacrament(
     For once-only sacraments (like Baptism), each parishioner can receive it only once.
     For repeatable sacraments (like Confession), multiple entries are allowed.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -296,7 +296,7 @@ async def update_sacrament_record(
     sacrament_in: SacramentUpdate,
 ) -> Any:
     """Update a sacrament record for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -398,7 +398,7 @@ async def delete_sacrament_record(
     sacrament_record_id: int = FastAPIPath(..., title="The ID of the sacrament record to delete"),
 ) -> Any:
     """Delete a sacrament record for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -455,7 +455,7 @@ async def delete_sacrament_records_by_type(
     current_user: CurrentUser,
 ) -> Any:
     """Delete all records for a specific sacrament type for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -524,7 +524,7 @@ async def batch_update_sacraments(
     For repeatable sacraments, multiple records are allowed.
     """
     # Check permissions
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

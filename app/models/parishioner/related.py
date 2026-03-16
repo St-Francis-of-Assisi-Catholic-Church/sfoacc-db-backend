@@ -29,7 +29,7 @@ class FamilyInfo(Base):
     parishioner_id = Column(UUID(as_uuid=True), ForeignKey("parishioners.id", ondelete="CASCADE"), unique=True)
 
     spouse_name = Column(String, nullable=True)
-    spouse_status = Column(String, nullable=True)
+    spouse_status = Column(Enum(LifeStatus), nullable=True)
     spouse_phone = Column(String, nullable=True)
 
     father_name = Column(String, nullable=True)

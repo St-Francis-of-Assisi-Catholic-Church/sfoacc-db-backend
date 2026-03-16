@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Path as FastAPIPath
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, is_admin
 from app.models.parishioner import Parishioner, FamilyInfo, Child, LifeStatus
 from app.schemas.common import APIResponse
 from app.schemas.parishioner import (
@@ -43,7 +43,7 @@ async def create_or_update_family_info(
     current_user: CurrentUser,
 ) -> Any:
     """Create or update family information for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -190,7 +190,7 @@ async def batch_update_family_info(
     Accepts a structured object with spouse, children, father, and mother information.
     """
     # Check permissions
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

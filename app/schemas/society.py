@@ -49,6 +49,8 @@ class SocietyBase(BaseModel):
     name: str
     description: Optional[str] = None
     date_inaugurated: Optional[date] = None
+    is_active: bool = True
+    church_unit_id: Optional[int] = None  # defaults to main parish if omitted
     meeting_frequency: MeetingFrequency
     meeting_day: Optional[str] = None
     meeting_time: Optional[time] = None
@@ -61,6 +63,8 @@ class SocietyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     date_inaugurated: Optional[date] = None
+    is_active: Optional[bool] = None
+    church_unit_id: Optional[int] = None
     meeting_frequency: Optional[MeetingFrequency] = None
     meeting_day: Optional[str] = None
     meeting_time: Optional[time] = None
@@ -76,6 +80,8 @@ class SocietyInDB(SocietyBase):
 
 class SocietyResponse(SocietyBase):
     id: int
+    church_unit_id: Optional[int] = None
+    church_unit_name: Optional[str] = None
     members_count: int = Field(0, description="Number of members in the society")
     leadership: List[SocietyLeadershipResponse] = []
 

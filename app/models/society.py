@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import enum
-from sqlalchemy import UUID, Column, ForeignKey, Integer, Date, DateTime, String, Table, Text, Time, func, Enum
+from sqlalchemy import UUID, Boolean, Column, ForeignKey, Integer, Date, DateTime, String, Table, Text, Time, func, Enum
 from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
 from app.models.common import MembershipStatus
@@ -49,6 +49,8 @@ class Society(Base):
     name = Column(String, unique=True, nullable=False)
     description = Column(Text, nullable=True)
     date_inaugurated = Column(Date, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+    church_unit_id = Column(Integer, ForeignKey("church_units.id", ondelete="RESTRICT"), nullable=False, index=True)
 
     # Meeting schedule
     meeting_frequency = Column(Enum(MeetingFrequency), nullable=False, default=MeetingFrequency.MONTHLY)
@@ -57,7 +59,8 @@ class Society(Base):
     meeting_venue = Column(String, nullable=True)
 
     # Relationships
-    members = db_relationship("Parishioner", secondary=society_members, back_populates="societies", lazy="dynamic")
+    church_unit = db_relationship("ChurchUnit", back_populates="societies")
+    members = db_relationship("Parishioner", secondary=society_members, back_populates="societies")
     leadership_positions = db_relationship("SocietyLeadership", back_populates="society")
 
 

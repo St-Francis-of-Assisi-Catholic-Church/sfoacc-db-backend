@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Query, BackgroundTasks, Re
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, timezone
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, require_permission
 from app.models.parishioner import (Parishioner as ParishionerModel, FamilyInfo)
 from app.models.verification import VerificationRecord
 from app.models.common import VerificationStatus
@@ -18,7 +18,7 @@ from app.core.config import settings
 # Create a router for this endpoint
 verify_router = APIRouter()
 
-@verify_router.post("", response_model=APIResponse)
+@verify_router.post("", response_model=APIResponse, dependencies=[require_permission("parishioner:verify")])
 async def send_verification_message(
     *,
     session: SessionDep,
@@ -28,17 +28,12 @@ async def send_verification_message(
     channel: Literal["email", "sms", "both"] = "both",
 ) -> Any:
     """
-     Send a verification message to a parishioner with their complete details.
-    
+    Send a verification message to a parishioner with their complete details.
+
     Parameters:
     - parishioner_id: ID of the parishioner to send verification to
     - channel: Communication channel to use (email, sms, or both)
     """
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     # Query parishioner with all relationships eagerly loaded
     parishioner = session.query(ParishionerModel).options(
@@ -50,7 +45,7 @@ async def send_verification_message(
         joinedload(ParishionerModel.skills_rel),
         joinedload(ParishionerModel.languages_rel),
         joinedload(ParishionerModel.societies),
-        joinedload(ParishionerModel.place_of_worship),
+        joinedload(ParishionerModel.station),
         joinedload(ParishionerModel.church_community)
     ).filter(
         ParishionerModel.id == parishioner_id
@@ -270,7 +265,7 @@ async def confirm_verification(
         }
     )
 
-@verify_router.post("/batch", response_model=APIResponse)
+@verify_router.post("/batch", response_model=APIResponse, dependencies=[require_permission("parishioner:verify")])
 async def send_batch_verification_messages(
     *,
     session: SessionDep,
@@ -281,11 +276,6 @@ async def send_batch_verification_messages(
     """
     Send verification messages to multiple parishioners at once via email and SMS.
     """
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     if not parishioner_ids:
         raise HTTPException(
@@ -303,7 +293,7 @@ async def send_batch_verification_messages(
         joinedload(ParishionerModel.skills_rel),
         joinedload(ParishionerModel.languages_rel),
         joinedload(ParishionerModel.societies),
-        joinedload(ParishionerModel.place_of_worship),
+        joinedload(ParishionerModel.station),
         joinedload(ParishionerModel.church_community)
     ).filter(
         ParishionerModel.id.in_(parishioner_ids)
@@ -423,7 +413,8 @@ async def send_batch_verification_messages(
         data=results
     )
 
-@verify_router.get("/check/{verification_id}", response_model=APIResponse)
+@verify_router.get("/check/{verification_id}", response_model=APIResponse,
+                   dependencies=[require_permission("parishioner:verify")])
 async def check_verification_status(
     verification_id: str,
     current_user: CurrentUser,
@@ -432,11 +423,6 @@ async def check_verification_status(
     """
     Check if a verification page exists and is accessible.
     """
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     verification = session.query(VerificationRecord).filter(
         VerificationRecord.id == verification_id

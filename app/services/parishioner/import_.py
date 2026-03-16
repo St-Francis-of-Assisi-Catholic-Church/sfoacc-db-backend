@@ -16,7 +16,7 @@ from app.models.parishioner import (
     Gender, MaritalStatus, VerificationStatus, MembershipStatus
 )
 from app.models.sacrament import Sacrament, SacramentType
-from app.models.place_of_worship import PlaceOfWorship
+from app.models.parish import ChurchUnit as Station
 from app.models.society import Society, society_members, MembershipStatus
 
 # Configure logging
@@ -776,28 +776,28 @@ class ParishionerImportService:
                     old_church_id=old_church_id
                 )
             
-            # Handle place of worship
-            place_of_worship_id = None
+            # Handle church unit (formerly place of worship / station)
+            church_unit_id = None
             if "place_worship" in row and not pd.isna(row["place_worship"]):
                 place_name = self.clean_text(row["place_worship"])
                 if place_name:
-                    # Try to find the place of worship by exact name first
-                    place_of_worship = self.db.query(PlaceOfWorship).filter(
-                        PlaceOfWorship.name == place_name
+                    # Try to find the church unit by exact name first
+                    station = self.db.query(Station).filter(
+                        Station.name == place_name
                     ).first()
-                    
+
                     # If not found, try fuzzy matching
-                    if not place_of_worship:
-                        place_of_worship = self.find_closest_match(place_name, PlaceOfWorship)
-                    
+                    if not station:
+                        station = self.find_closest_match(place_name, Station)
+
                     # If it exists, use its ID
-                    if place_of_worship:
-                        place_of_worship_id = place_of_worship.id
-                        if place_of_worship.name != place_name:
-                            logger.info(f"Found place of worship '{place_of_worship.name}' as closest match for '{place_name}'")
+                    if station:
+                        church_unit_id = station.id
+                        if station.name != place_name:
+                            logger.info(f"Found church unit '{station.name}' as closest match for '{place_name}'")
                     else:
                         # If it doesn't exist, log a warning
-                        logger.warning(f"Place of worship '{place_name}' not found in database and no close match found")
+                        logger.warning(f"Church unit '{place_name}' not found in database and no close match found")
 
             # Handle church community
             church_community_id = None
@@ -843,7 +843,7 @@ class ParishionerImportService:
                 membership_status=MembershipStatus.ACTIVE,
                 verification_status=VerificationStatus.UNVERIFIED,
                 current_residence=self.clean_text(row.get("current_residence", "")),
-                place_of_worship_id=place_of_worship_id,
+                church_unit_id=church_unit_id,
                 church_community_id=church_community_id
             )
 

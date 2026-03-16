@@ -26,7 +26,9 @@ RED    := \033[0;31m
         build build-clean up down restart logs \
         setup ssl \
         migrate migrate-auto migrate-history migrate-rollback \
-        init-db seed superuser check-db \
+        init-db seed seed-rbac seed-parish superuser check-db \
+        dump-db load-dump \
+        sdk \
         shell bash \
         lint clean
 
@@ -59,10 +61,17 @@ help:
 	@echo "  $(YELLOW)make migrate-rollback$(RESET)    Rollback last migration"
 	@echo "  $(YELLOW)make init-db$(RESET)             Run app init_db script inside container"
 	@echo "  $(YELLOW)make seed$(RESET)                Seed reference data (sacraments, communities, etc.)"
+	@echo "  $(YELLOW)make seed-rbac$(RESET)           Seed RBAC roles and permissions"
+	@echo "  $(YELLOW)make seed-parish$(RESET)         Seed default parish and stations"
 	@echo "  $(YELLOW)make check-db$(RESET)            Test database connection"
+	@echo "  $(YELLOW)make dump-db$(RESET)             Dump database to dumps/<timestamp>.sql"
+	@echo "  $(YELLOW)make load-dump dump=<file>$(RESET) Load a dump from dumps/<file> into the database"
 	@echo ""
 	@echo "$(GREEN)Admin:$(RESET)"
 	@echo "  $(YELLOW)make superuser$(RESET)           Create the first superuser"
+	@echo ""
+	@echo "$(GREEN)SDK:$(RESET)"
+	@echo "  $(YELLOW)make sdk$(RESET)                 Regenerate sdk/types.ts from live OpenAPI schema"
 	@echo ""
 	@echo "$(GREEN)Dev tools:$(RESET)"
 	@echo "  $(YELLOW)make shell$(RESET)               Open Python shell inside api container"
@@ -122,6 +131,8 @@ setup:
 	$(MAKE) up ENV=$(ENV)
 	$(MAKE) init-db ENV=$(ENV)
 	$(MAKE) seed ENV=$(ENV)
+	$(MAKE) seed-rbac ENV=$(ENV)
+	$(MAKE) seed-parish ENV=$(ENV)
 	$(MAKE) superuser ENV=$(ENV)
 	@echo ""
 	@echo "$(GREEN)Setup complete!$(RESET)"
@@ -164,6 +175,16 @@ seed:
 	$(COMPOSE) exec api python3 -m app.scripts.seed_languages
 	@echo "$(GREEN)Seeding complete.$(RESET)"
 
+seed-rbac:
+	@echo "$(GREEN)Seeding RBAC roles and permissions...$(RESET)"
+	$(COMPOSE) exec api python3 -m app.scripts.seed_rbac
+	@echo "$(GREEN)RBAC seeding complete. Re-run anytime to add new permissions/roles.$(RESET)"
+
+seed-parish:
+	@echo "$(GREEN)Seeding default parish and stations...$(RESET)"
+	$(COMPOSE) exec api python3 -m app.scripts.seed_parish
+	@echo "$(GREEN)Parish seeding complete.$(RESET)"
+
 check-db:
 	@echo "$(YELLOW)Checking database connection...$(RESET)"
 	@$(COMPOSE) exec api python3 -c "\
@@ -177,12 +198,63 @@ superuser:
 	@echo "$(GREEN)Creating superuser...$(RESET)"
 	$(COMPOSE) exec api python3 -m app.scripts.create_superuser
 
+load-parishioners:
+	@echo "$(GREEN)Loading parishioners from dump...$(RESET)"
+	$(COMPOSE) cp dumps/app_dump_20260310_075402.sql api:/app/dumps/app_dump_20260310_075402.sql
+	$(COMPOSE) exec api python3 /app/app/scripts/load_from_dump.py
+
+# ── Dumps ────────────────────────────────────────────────────
+dump-db:
+	@mkdir -p dumps
+	@set -a && . ./.env && set +a && \
+	STAMP=$$(date +%Y%m%d_%H%M%S) && \
+	FILE="dumps/dump_$${STAMP}.sql" && \
+	echo "$(GREEN)Dumping database to $${FILE}...$(RESET)" && \
+	PGPASSWORD=$$POSTGRES_PASSWORD pg_dump \
+		-h $$POSTGRES_SERVER \
+		-p $$POSTGRES_PORT \
+		-U $$POSTGRES_USER \
+		-d $$POSTGRES_DB \
+		--no-owner --no-acl \
+		-f "$${FILE}" && \
+	echo "$(GREEN)Dump saved to $${FILE}$(RESET)"
+
+load-dump:
+ifndef dump
+	$(error Usage: make load-dump dump=<filename>   e.g. make load-dump dump=app_dump_20260310_075402.sql)
+endif
+	@test -f dumps/$(dump) || (echo "$(RED)Error: dumps/$(dump) not found$(RESET)" && exit 1)
+	@echo "$(YELLOW)Loading dumps/$(dump) ...$(RESET)"
+ifeq ($(ENV),local)
+	$(COMPOSE) exec -T db sh -c \
+		'PGPASSWORD=$$POSTGRES_PASSWORD psql -h localhost -U $$POSTGRES_USER -d $$POSTGRES_DB' \
+		< dumps/$(dump)
+else
+	@set -a && . ./.env && set +a && \
+	PGPASSWORD=$$POSTGRES_PASSWORD psql \
+		-h $$POSTGRES_SERVER \
+		-p $$POSTGRES_PORT \
+		-U $$POSTGRES_USER \
+		-d $$POSTGRES_DB \
+		< dumps/$(dump)
+endif
+	@echo "$(GREEN)Dump loaded successfully.$(RESET)"
+
 # ── Shells ───────────────────────────────────────────────────
 shell:
 	$(COMPOSE) exec api python3
 
 bash:
 	$(COMPOSE) exec api /bin/bash
+
+# ── SDK generation ───────────────────────────────────────────
+sdk:
+	@echo "$(GREEN)Regenerating sdk/types.ts from OpenAPI schema...$(RESET)"
+	$(COMPOSE) exec api mkdir -p /app/scripts /app/sdk
+	$(COMPOSE) cp scripts/gen_sdk.py api:/app/scripts/gen_sdk.py
+	$(COMPOSE) exec api python3 /app/scripts/gen_sdk.py
+	$(COMPOSE) cp api:/app/sdk/types.ts sdk/types.ts
+	@echo "$(CYAN)Done. Review sdk/client.ts and sdk/hooks.ts if you added new endpoints.$(RESET)"
 
 # ── Linting / cleanup ────────────────────────────────────────
 lint:

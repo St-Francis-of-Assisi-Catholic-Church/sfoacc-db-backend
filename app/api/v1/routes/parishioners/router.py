@@ -7,13 +7,13 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission
 from app.models.church_community import ChurchCommunity
 from app.models.parishioner import (
     Parishioner as ParishionerModel,
     FamilyInfo,
 )
-from app.models.place_of_worship import PlaceOfWorship
+from app.models.parish import ChurchUnit
 from app.models.society import society_members
 from app.schemas.common import APIResponse
 from app.schemas.parishioner import (
@@ -40,15 +40,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_ADMIN_ROLES = ["super_admin", "admin"]
 
-
-def _require_admin(current_user):
-    if current_user.role not in _ADMIN_ROLES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-
-
-@router.post("", response_model=APIResponse)
+@router.post("", response_model=APIResponse, dependencies=[require_permission("parishioner:write")])
 async def create_parishioner(
     *,
     session: SessionDep,
@@ -56,7 +49,6 @@ async def create_parishioner(
     current_user: CurrentUser,
     background_tasks: BackgroundTasks,
 ) -> Any:
-    _require_admin(current_user)
     try:
         db_parishioner = ParishionerModel(**parishioner_in.model_dump())
         session.add(db_parishioner)
@@ -87,17 +79,18 @@ async def create_parishioner(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
-@router.get("/all", response_model=APIResponse)
+@router.get("/all", response_model=APIResponse, dependencies=[require_permission("parishioner:read")])
 async def get_all_parishioners(
     *,
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
     skip: int = Query(0, ge=0),
     limit: int = Query(1000, ge=1, le=1000),
     search: Optional[str] = None,
     society_id: Optional[int] = Query(None, description="Filter by society ID"),
     church_community_id: Optional[int] = Query(None, description="Filter by church community ID"),
-    place_of_worship_id: Optional[int] = Query(None, description="Filter by place of worship ID"),
+    church_unit_id: Optional[int] = Query(None, description="Filter by church unit ID"),
     gender: Optional[str] = Query(None, description="Filter by gender"),
     marital_status: Optional[str] = Query(None, description="Filter by marital status"),
     birth_day_name: Optional[str] = Query(None, description="Filter by day of the week of birth"),
@@ -107,7 +100,6 @@ async def get_all_parishioners(
     has_old_church_id: Optional[bool] = Query(None, description="Filter by presence of old church ID"),
     has_new_church_id: Optional[bool] = Query(None, description="Filter by presence of new church ID"),
 ) -> Any:
-    _require_admin(current_user)
 
     query = session.query(ParishionerModel)
 
@@ -134,8 +126,11 @@ async def get_all_parishioners(
     if church_community_id is not None:
         query = query.filter(ParishionerModel.church_community_id == church_community_id)
 
-    if place_of_worship_id is not None:
-        query = query.filter(ParishionerModel.place_of_worship_id == place_of_worship_id)
+    # Unit-scoped users always see only their unit; global admins can optionally filter
+    if unit_scope is not None:
+        query = query.filter(ParishionerModel.church_unit_id == unit_scope)
+    elif church_unit_id is not None:
+        query = query.filter(ParishionerModel.church_unit_id == church_unit_id)
 
     if gender is not None:
         gender_mapping = {
@@ -246,7 +241,7 @@ async def get_all_parishioners(
         "search": search,
         "society_id": society_id,
         "church_community_id": church_community_id,
-        "place_of_worship_id": place_of_worship_id,
+        "church_unit_id": church_unit_id,
         "gender": gender,
         "marital_status": marital_status,
         "birth_day_name": birth_day_name,
@@ -261,7 +256,7 @@ async def get_all_parishioners(
         message=f"Retrieved {len(parishioners_data)} parishioners",
         data={
             "total": total_count,
-            "parishioners": parishioners_data,
+            "items": parishioners_data,
             "skip": skip,
             "limit": limit,
             "filters_applied": applied_filters,
@@ -269,13 +264,12 @@ async def get_all_parishioners(
     )
 
 
-@router.get("/{parishioner_id}", response_model=APIResponse)
+@router.get("/{parishioner_id}", response_model=APIResponse, dependencies=[require_permission("parishioner:read")])
 async def get_detailed_parishioner(
     parishioner_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
-    _require_admin(current_user)
 
     parishioner = session.query(ParishionerModel).options(
         joinedload(ParishionerModel.occupation_rel),
@@ -371,7 +365,7 @@ async def get_detailed_parishioner(
         "medical_conditions": parishioner.medical_conditions_rel,
         "sacraments": parishioner.sacrament_records,
         "skills": parishioner.skills_rel,
-        "place_of_worship": parishioner.place_of_worship,
+        "church_unit": parishioner.church_unit,
         "church_community": parishioner.church_community,
         "societies": societies_data,
         "languages_spoken": languages_data,
@@ -383,7 +377,7 @@ async def get_detailed_parishioner(
     )
 
 
-@router.put("/{parishioner_id}", response_model=APIResponse)
+@router.put("/{parishioner_id}", response_model=APIResponse, dependencies=[require_permission("parishioner:write")])
 async def update_parishioner(
     *,
     session: SessionDep,
@@ -391,7 +385,6 @@ async def update_parishioner(
     parishioner_in: ParishionerPartialUpdate,
     current_user: CurrentUser,
 ) -> Any:
-    _require_admin(current_user)
 
     parishioner = session.query(ParishionerModel).filter(
         ParishionerModel.id == parishioner_id
@@ -406,19 +399,19 @@ async def update_parishioner(
         if not update_data:
             return APIResponse(message="No fields to update", data=ParishionerRead.model_validate(parishioner))
 
-        if 'place_of_worship_id' in update_data:
+        if 'church_unit_id' in update_data:
             try:
-                update_data['place_of_worship_id'] = int(update_data['place_of_worship_id'])
+                update_data["church_unit_id"] = int(update_data["church_unit_id"])
             except (ValueError, TypeError):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid place_of_worship_id format. Must be a valid integer.",
+                    detail="Invalid church_unit_id format. Must be a valid integer.",
                 )
-            place = session.query(PlaceOfWorship).filter(PlaceOfWorship.id == update_data['place_of_worship_id']).first()
-            if not place:
+            church_unit = session.query(ChurchUnit).filter(ChurchUnit.id == update_data["church_unit_id"]).first()
+            if not church_unit:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Place of worship with ID {update_data['place_of_worship_id']} not found",
+                    detail=f"Church unit with ID {update_data['church_unit_id']} not found",
                 )
 
         if 'church_community_id' in update_data:
@@ -463,7 +456,8 @@ async def update_parishioner(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
-@router.post("/{parishioner_id}/generate-church-id", response_model=APIResponse)
+@router.post("/{parishioner_id}/generate-church-id", response_model=APIResponse,
+             dependencies=[require_permission("parishioner:generate_id")])
 async def generate_church_id(
     *,
     session: SessionDep,
@@ -479,7 +473,6 @@ async def generate_church_id(
     Format: first_initial + last_initial + day(2) + month(2) + "-" + old_id(5 digits)
     Example: KN3001-00045
     """
-    _require_admin(current_user)
 
     parishioner = session.query(ParishionerModel).filter(ParishionerModel.id == parishioner_id).first()
     if not parishioner:

@@ -19,6 +19,7 @@ from app.core.exceptions import (
     make_json_safe,
 )
 from app.middleware.logger import setup_logging
+from app.middleware.audit import AuditMiddleware
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -44,9 +45,13 @@ async def lifespan(app: FastAPI):
     logger.info(f"API Version 1 path: {settings.API_V1_STR}")
     logger.info(f"Backend CORS origins: {settings.BACKEND_CORS_ORIGINS}")
 
+    from app.services.messaging import scheduler as msg_scheduler
+    msg_scheduler.start()
+
     yield
 
     logger.info("Shutting down application...")
+    msg_scheduler.stop()
     db.dispose()
     logger.info("Application shutdown complete")
 
@@ -91,6 +96,7 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(AuditMiddleware)
 
 if settings.all_cors_origins:
     app.add_middleware(
@@ -112,4 +118,5 @@ async def root():
         "environment": settings.ENVIRONMENT,
         "docs": f"{settings.API_V1_STR}/docs",
         "redoc": f"{settings.API_V1_STR}/redoc",
+        "guide": f"{settings.API_V1_STR}/guide",
     }

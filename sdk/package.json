@@ -1,0 +1,14 @@
+{
+  "name": "sfoacc-sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for the SFOACC API",
+  "main": "index.ts",
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "typescript": "^5.0.0"
+  }
+}

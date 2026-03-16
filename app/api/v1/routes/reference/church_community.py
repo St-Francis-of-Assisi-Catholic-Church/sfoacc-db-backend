@@ -1,12 +1,13 @@
 import logging
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission
 from app.models.church_community import ChurchCommunity
+from app.models.parish import ChurchUnit, ChurchUnitType
 from app.schemas.church_community import ChurchCommunityRead, ChurchCommunityCreate, ChurchCommunityUpdate
 from app.schemas.common import APIResponse
 
@@ -15,13 +16,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+_REQUIRE_ADMIN = require_permission("admin:all")
 
 @router.get("/all", response_model=APIResponse)
 async def get_church_communities(
     *,
     session: SessionDep,
     current_user: CurrentUser,
-    search: Optional[str] = None
+    unit_scope: ChurchUnitScope,
+    search: Optional[str] = None,
+    church_unit_id: Optional[int] = Query(None, description="Filter by church unit"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
 ) -> Any:
     """
     Get all church communities with optional search by name or description.
@@ -29,7 +35,13 @@ async def get_church_communities(
     try:
         # Build query
         query = session.query(ChurchCommunity)
-        
+
+        # Unit-scoped users always see only their unit; global admins can optionally filter
+        if unit_scope is not None:
+            query = query.filter(ChurchCommunity.church_unit_id == unit_scope)
+        elif church_unit_id is not None:
+            query = query.filter(ChurchCommunity.church_unit_id == church_unit_id)
+
         # Apply search filter if provided
         if search:
             search_term = f"%{search}%"
@@ -39,19 +51,19 @@ async def get_church_communities(
                     ChurchCommunity.description.ilike(search_term)
                 )
             )
-            
-        # Execute query
-        communities = query.all()
-        
+
+        total = query.count()
+        communities = query.offset(skip).limit(limit).all()
+
         # Convert to Pydantic models
         communities_data = [
-            ChurchCommunityRead.model_validate(community) 
+            ChurchCommunityRead.model_validate(community)
             for community in communities
         ]
-        
+
         return APIResponse(
             message=f"Retrieved {len(communities_data)} church communities",
-            data=communities_data
+            data={"total": total, "items": communities_data, "skip": skip, "limit": limit},
         )
         
     except Exception as e:
@@ -61,7 +73,7 @@ async def get_church_communities(
             detail=f"Error retrieving church communities: {str(e)}"
         )
 
-@router.post("", response_model=APIResponse)
+@router.post("", response_model=APIResponse, dependencies=[_REQUIRE_ADMIN])
 async def create_church_community(
     *,
     session: SessionDep,
@@ -72,16 +84,16 @@ async def create_church_community(
     Create a new church community.
     Only admins can create church communities.
     """
-    # Check permissions
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
-        # Create new church community
-        community = ChurchCommunity(**community_in.model_dump())
+        data = community_in.model_dump()
+        # Default to main parish if no church_unit_id provided
+        if not data.get("church_unit_id"):
+            main_parish = session.query(ChurchUnit).filter(ChurchUnit.type == ChurchUnitType.PARISH).first()
+            if main_parish:
+                data["church_unit_id"] = main_parish.id
+
+        community = ChurchCommunity(**data)
         session.add(community)
         session.commit()
         session.refresh(community)
@@ -142,7 +154,7 @@ async def get_church_community_by_id(
             detail=f"Error retrieving church community: {str(e)}"
         )
 
-@router.put("/{community_id}", response_model=APIResponse)
+@router.put("/{community_id}", response_model=APIResponse, dependencies=[_REQUIRE_ADMIN])
 async def update_church_community(
     *,
     session: SessionDep,
@@ -154,12 +166,6 @@ async def update_church_community(
     Update a church community by ID.
     Only admins can update church communities.
     """
-    # Check permissions
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
         # Query for specific church community
@@ -208,7 +214,7 @@ async def update_church_community(
             detail=f"Error updating church community: {str(e)}"
         )
 
-@router.delete("/{community_id}", response_model=APIResponse)
+@router.delete("/{community_id}", response_model=APIResponse, dependencies=[_REQUIRE_ADMIN])
 async def delete_church_community(
     *,
     session: SessionDep,
@@ -219,12 +225,6 @@ async def delete_church_community(
     Delete a church community by ID.
     Only admins can delete church communities.
     """
-    # Check permissions
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     
     try:
         # Query for specific church community

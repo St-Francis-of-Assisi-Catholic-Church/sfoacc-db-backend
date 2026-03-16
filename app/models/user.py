@@ -1,20 +1,21 @@
 from datetime import datetime, timezone
 import uuid
-from sqlalchemy import UUID, Column, DateTime, String, Enum, func, event
+from sqlalchemy import UUID, Boolean, Column, DateTime, String, Integer, ForeignKey, Enum, func, event
 import enum
+from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
-
-
-class UserRole(str, enum.Enum):
-    SUPER_ADMIN = "super_admin"
-    ADMIN = "admin"
-    USER = "user"
 
 
 class UserStatus(str, enum.Enum):
     ACTIVE = "active"
     DISABLED = "disabled"
     RESET_REQUIRED = "reset_required"
+
+
+class LoginMethod(str, enum.Enum):
+    PASSWORD = "password"
+    EMAIL_OTP = "email_otp"
+    SMS_OTP = "sms_otp"
 
 
 class User(Base):
@@ -24,7 +25,15 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER.value)
+    phone = Column(String(20), nullable=True, index=True)  # digits + country code, e.g. 233543460633
+    login_method = Column(
+        Enum(LoginMethod),
+        nullable=False,
+        default=LoginMethod.PASSWORD,
+        server_default=LoginMethod.PASSWORD.value,
+    )
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=True, index=True)
+    church_unit_id = Column(Integer, ForeignKey("church_units.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(
         Enum(UserStatus),
         nullable=False,
@@ -43,6 +52,9 @@ class User(Base):
         server_default=func.now(),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+    role_ref = db_relationship("Role", back_populates="users")
+    church_unit = db_relationship("ChurchUnit", back_populates="users")
 
     def __repr__(self):
         return f"<User {self.email}>"

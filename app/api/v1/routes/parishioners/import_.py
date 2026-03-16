@@ -9,9 +9,8 @@ import csv
 import re
 from typing import List, Dict, Any, Optional
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, require_permission
 from app.core.config import settings
-from app.models.user import UserRole
 from app.services.parishioner.import_ import ParishionerImportService
 
 # Configure logging
@@ -610,7 +609,8 @@ def validate_csv_data_mapped(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
-@file_upload_router.post("/batch", status_code=status.HTTP_201_CREATED)
+@file_upload_router.post("/batch", status_code=status.HTTP_201_CREATED,
+                         dependencies=[require_permission("parishioner:import")])
 async def upload_parishioners_csv(
     session: SessionDep,
     current_user: CurrentUser,
@@ -618,17 +618,11 @@ async def upload_parishioners_csv(
 ):
     """
     Upload a CSV or TSV file with parishioner data and import it into the database.
-    
+
     The file should have columns matching the parishioner model fields.
     Required columns: "Last Name (Surname)", "First Name", "Gender"
     Optional columns: "Date of Birth", "Email Address", etc.
     """
-    # Check permissions
-    if current_user.role != UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. Only super admins can import parishioners."
-        )
   
     # Validate file type
     if not (file.filename.endswith('.csv') or file.filename.endswith('.tsv') or file.filename.endswith('.txt')):

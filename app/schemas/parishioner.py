@@ -7,7 +7,8 @@ from enum import Enum
 
 from app.models.parishioner import MembershipStatus, Gender, LifeStatus, MaritalStatus, VerificationStatus
 from app.models.sacrament import SacramentType
-from app.schemas.sacrament import SacramentRead 
+from app.schemas.sacrament import SacramentRead
+from app.schemas.parish import ChurchUnitRead
 
 
 class ChurchCommunityBase(BaseModel):
@@ -293,44 +294,63 @@ class FamilyInfoUpdate(BaseModel):
         }
 # Parishioner Schemas
 class ParishionerBase(BaseModel):
+    # Identity
+    title: Optional[str] = Field(None, max_length=20)
     old_church_id: Optional[str] = None
     new_church_id: Optional[str] = None
     first_name: str = Field(..., min_length=2, max_length=50)
     other_names: Optional[str] = Field(None, max_length=100)
     last_name: str = Field(..., min_length=2, max_length=50)
     maiden_name: Optional[str] = Field(None, max_length=50)
+    baptismal_name: Optional[str] = Field(None, max_length=100)
     gender: Gender
     date_of_birth: Optional[date] = None
     place_of_birth: Optional[str] = None
+    nationality: Optional[str] = Field(None, max_length=100)
     hometown: Optional[str] = None
     region: Optional[str] = None
     country: Optional[str] = None
     marital_status: Optional[MaritalStatus] = MaritalStatus.SINGLE
+
+    # Contact
     mobile_number: Optional[str] = None
     whatsapp_number: Optional[str] = None
     email_address: Optional[EmailStr] = None
-    # place_of_worship: Optional[str] = None
     current_residence: Optional[str] = None
 
-    membership_status: Optional[MembershipStatus] = MembershipStatus.ACTIVE  # Default value
-    verification_status: Optional[VerificationStatus] = VerificationStatus.UNVERIFIED 
+    # Vital status
+    is_deceased: Optional[bool] = False
+    date_of_death: Optional[date] = None
+
+    # Profile
+    photo_url: Optional[str] = Field(None, max_length=500)
+    notes: Optional[str] = None
+
+    membership_status: Optional[MembershipStatus] = MembershipStatus.ACTIVE
+    verification_status: Optional[VerificationStatus] = VerificationStatus.UNVERIFIED
+
 
 class ParishionerCreate(ParishionerBase):
     pass
 
+
 class ParishionerUpdate(ParishionerBase):
-   pass
+    pass
+
 
 class ParishionerPartialUpdate(BaseModel):
+    title: Optional[str] = None
     old_church_id: Optional[str] = None
     new_church_id: Optional[str] = None
     first_name: Optional[str] = None
     other_names: Optional[str] = None
     last_name: Optional[str] = None
     maiden_name: Optional[str] = None
+    baptismal_name: Optional[str] = None
     gender: Optional[Gender] = None
     date_of_birth: Optional[date] = None
     place_of_birth: Optional[str] = None
+    nationality: Optional[str] = None
     hometown: Optional[str] = None
     region: Optional[str] = None
     country: Optional[str] = None
@@ -338,10 +358,13 @@ class ParishionerPartialUpdate(BaseModel):
     mobile_number: Optional[str] = None
     whatsapp_number: Optional[str] = None
     email_address: Optional[EmailStr] = None
-    place_of_worship_id: Optional[str] = None
+    church_unit_id: Optional[int] = None
     church_community_id: Optional[str] = None
     current_residence: Optional[str] = None
-
+    is_deceased: Optional[bool] = None
+    date_of_death: Optional[date] = None
+    photo_url: Optional[str] = None
+    notes: Optional[str] = None
     membership_status: Optional[MembershipStatus] = None
     verification_status: Optional[VerificationStatus] = None
 
@@ -360,10 +383,9 @@ class ParishionerDetailedRead(ParishionerRead):
     medical_conditions: List[MedicalConditionRead] = []
     sacraments: List[ParSacramentRead] = []
     skills: List[SkillRead] = []
-    # languages: List[]
-    place_of_worship: Optional[PlaceOfWorshipRead] = None
+    church_unit: Optional[ChurchUnitRead] = None
     church_community: Optional[ChurchCommunityRead] = None
-    societies: List[ParSocietyRead] = [] 
+    societies: List[ParSocietyRead] = []
     languages_spoken: List[Any] = []
 
     class Config:

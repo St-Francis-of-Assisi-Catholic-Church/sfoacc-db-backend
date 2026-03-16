@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     # First Admin User
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
+    FIRST_SUPERUSER_PHONE: str = ""   # digits + country code, e.g. 233543460633
     SUPER_ADMIN_EMAIL: str = "database.sfoacc@gmail.com"
 
     @property

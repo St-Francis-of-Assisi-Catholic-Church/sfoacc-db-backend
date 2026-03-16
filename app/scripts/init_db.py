@@ -6,6 +6,11 @@ from sqlalchemy import text
 
 from app.core.database import db
 
+# Import all models so Base.metadata.create_all picks them up
+from app.models.parish import ChurchUnit, MassSchedule  # noqa: F401
+from app.models.rbac import Role, Permission  # noqa: F401
+from app.models.settings import ParishSettings  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 

@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, HTTPException, Path, Query, status
 from sqlalchemy import func
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, is_admin
 from app.models.language import Language
 from app.schemas.common import APIResponse
 from app.schemas.language import LanguageCreate, LanguageRead, LanguageUpdate
@@ -28,7 +28,7 @@ async def get_all_languages(
     """
     Get all available languages with optional search and pagination.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -77,7 +77,7 @@ async def create_language(
     """
     Create a new language.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -135,7 +135,7 @@ async def get_language(
     """
     Get a specific language by ID.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -175,7 +175,7 @@ async def update_language(
     """
     Update a language.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -241,7 +241,7 @@ async def delete_language(
     """
     Delete a language.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

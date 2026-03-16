@@ -1,5 +1,6 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 import logging
+from typing import Dict, Any, List, Optional
 
 from pydantic import BaseModel, EmailStr
 from app.core.config import settings
@@ -191,5 +192,117 @@ class EmailService:
             logger.error(f"Failed to send verification confirmation email to {email}: {str(e)}")
             return False
         
+    async def send_custom_message(
+        self,
+        to_email: str,
+        parishioner_name: str,
+        custom_message: str,
+        subject: str = "Message from Your Parish",
+        **ctx: Any,
+    ) -> bool:
+        """Send a custom freeform message to a single recipient."""
+        try:
+            # Format any {variable} placeholders in the message
+            context = {"parishioner_name": parishioner_name, **ctx}
+            try:
+                formatted = custom_message.format(**context)
+            except KeyError:
+                formatted = custom_message
+
+            html_body = (
+                f"<p>Dear {parishioner_name},</p>"
+                f"<p>{formatted.replace(chr(10), '<br/>')}</p>"
+                f"<p style='color:#888;font-size:12px'>— {settings.CHURCH_NAME}</p>"
+            )
+            message = MessageSchema(
+                subject=subject,
+                recipients=[to_email],
+                body=html_body,
+                subtype="html",
+            )
+            await self.fast_mail.send_message(message)
+            logger.info(f"Custom email sent to {to_email}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send custom email to {to_email}: {str(e)}")
+            return False
+
+    async def send_from_template(
+        self,
+        template_name: str,
+        to_emails: List[str],
+        context: Dict[str, Any],
+    ) -> bool:
+        """Send a bulk-messaging template as email.
+
+        Uses the SMS template content (formatted with *context*) as the email body,
+        so both channels share the same template registry.
+        """
+        try:
+            from app.services.sms.service import sms_service
+
+            template = sms_service.get_template(template_name)
+            if not template:
+                logger.error(f"Email template '{template_name}' not found")
+                return False
+
+            try:
+                body_text = template.content.format(**context)
+            except KeyError as e:
+                logger.error(f"Missing template variable: {e}")
+                body_text = template.content
+
+            parishioner_name = context.get("parishioner_name", "")
+            html_body = (
+                f"<p>Dear {parishioner_name},</p>"
+                f"<p>{body_text}</p>"
+                f"<p style='color:#888;font-size:12px'>— {settings.CHURCH_NAME}</p>"
+            )
+            subject = template.name
+            message = MessageSchema(
+                subject=subject,
+                recipients=to_emails,
+                body=html_body,
+                subtype="html",
+            )
+            await self.fast_mail.send_message(message)
+            logger.info(f"Template email '{template_name}' sent to {to_emails}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send template email '{template_name}': {str(e)}")
+            return False
+
+    async def send_account_creation_sms_fallback(
+        self,
+        phone: str,
+        full_name: str,
+        temp_password: str,
+    ) -> None:
+        """Placeholder — SMS is handled by sms_service directly."""
+        pass
+
+    async def send_otp_code(self, email: str, full_name: str, code: str) -> bool:
+        """Send a login OTP code via email."""
+        try:
+            message = MessageSchema(
+                subject="Your SFOACC Login Code",
+                recipients=[email],
+                body=(
+                    f"<p>Hello {full_name},</p>"
+                    f"<p>Your one-time login code is:</p>"
+                    f"<h2 style='letter-spacing:8px;font-family:monospace'>{code}</h2>"
+                    f"<p>This code expires in 10 minutes. Do not share it with anyone.</p>"
+                    f"<p>If you did not request this, please contact your administrator.</p>"
+                ),
+                subtype="html",
+            )
+            await self.fast_mail.send_message(message)
+            logger.info(f"OTP email sent to {email}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send OTP email to {email}: {str(e)}")
+            return False
+
+
 # Create a singleton instance
 email_service = EmailService()

@@ -13,7 +13,7 @@ from app.models.parishioner import (
     Parishioner as ParishionerModel,
     ParishionerSacrament,
 )
-from app.models.place_of_worship import PlaceOfWorship
+from app.models.parish import ChurchUnit, ChurchUnitType
 from app.models.sacrament import Sacrament
 from app.models.society import Society, society_members
 from app.schemas.common import APIResponse
@@ -44,9 +44,12 @@ async def get_parishioner_stats(
         total_parishioners = session.query(func.count(ParishionerModel.id)).scalar()
 
         # Use scalar subqueries to avoid cross-join bug
-        total_societies, total_places_of_worship, total_communities = session.query(
+        total_outstations_sq = sa_select(func.count(ChurchUnit.id)).where(
+            ChurchUnit.type == ChurchUnitType.OUTSTATION
+        ).scalar_subquery()
+        total_societies, total_stations, total_communities = session.query(
             sa_select(func.count(Society.id)).scalar_subquery(),
-            sa_select(func.count(PlaceOfWorship.id)).scalar_subquery(),
+            total_outstations_sq,
             sa_select(func.count(ChurchCommunity.id)).scalar_subquery(),
         ).one()
 
@@ -127,22 +130,21 @@ async def get_parishioner_stats(
                 else:
                     age_groups["61+"] += count
 
-        # Place of worship distribution — single LEFT JOIN replaces 3 queries
-        place_of_worship_distribution: dict = {}
-        unspecified_pow = 0
-        for place_name, count in (
-            session.query(PlaceOfWorship.name, func.count(ParishionerModel.id))
-            .outerjoin(ParishionerModel, PlaceOfWorship.id == ParishionerModel.place_of_worship_id)
-            .group_by(PlaceOfWorship.name)
+        # Church unit distribution — single LEFT JOIN
+        outstation_distribution: dict = {}
+        for unit_name, count in (
+            session.query(ChurchUnit.name, func.count(ParishionerModel.id))
+            .outerjoin(ParishionerModel, ChurchUnit.id == ParishionerModel.church_unit_id)
+            .filter(ChurchUnit.type == ChurchUnitType.OUTSTATION)
+            .group_by(ChurchUnit.name)
             .all()
         ):
-            place_of_worship_distribution[place_name] = count or 0
-        unspecified_pow = (
+            outstation_distribution[unit_name] = count or 0
+        outstation_distribution["Not specified"] = (
             session.query(func.count(ParishionerModel.id))
-            .filter(ParishionerModel.place_of_worship_id.is_(None))
+            .filter(ParishionerModel.church_unit_id.is_(None))
             .scalar()
         )
-        place_of_worship_distribution["Not specified"] = unspecified_pow
 
         # Church community distribution — single LEFT JOIN replaces 3 queries
         church_community_distribution: dict = {}
@@ -164,7 +166,7 @@ async def get_parishioner_stats(
             data={
                 "total_parishioners": total_parishioners,
                 "total_societies": total_societies,
-                "total_places_of_worship": total_places_of_worship,
+                "total_outstations": total_stations,
                 "total_church_communities": total_communities,
                 "society_distribution": {s[0]: s[1] for s in society_stats},
                 "parishioners_in_societies": parishioners_in_societies_count,
@@ -174,7 +176,7 @@ async def get_parishioner_stats(
                 "gender_distribution": gender_distribution,
                 "marital_status_distribution": marital_status_distribution,
                 "age_group_distribution": age_groups,
-                "place_of_worship_distribution": place_of_worship_distribution,
+                "outstation_distribution": outstation_distribution,
                 "church_community_distribution": church_community_distribution,
             },
         )

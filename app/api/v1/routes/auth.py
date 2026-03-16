@@ -2,23 +2,29 @@ import time
 from collections import defaultdict
 from datetime import timedelta
 from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from pydantic import BaseModel, field_validator
 
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.api.deps import SessionDep, CurrentUser, check_user_status
 
 from app.schemas.user import LoginResponse, PasswordResetRequest, PasswordResetResponse, User
-from app.models.user import User as UserModel, UserStatus
+from app.models.user import User as UserModel, UserStatus, LoginMethod
+from app.services.otp_service import (
+    generate_otp, verify_otp, send_otp_sms, send_otp_email,
+    is_method_enabled,
+)
 
 router = APIRouter()
 
-# Simple in-memory rate limiter: ip -> [timestamp, ...]
+# ── Rate limiter (in-memory) ─────────────────────────────────────────────────
+
 _login_attempts: dict = defaultdict(list)
-_RATE_LIMIT_WINDOW = 60   # seconds
-_RATE_LIMIT_MAX = 10      # max attempts per window per IP
+_RATE_LIMIT_WINDOW = 60
+_RATE_LIMIT_MAX = 10
 
 
 def _check_rate_limit(ip: str) -> None:
@@ -34,117 +40,192 @@ def _check_rate_limit(ip: str) -> None:
     _login_attempts[ip].append(now)
 
 
+def _issue_token(user: UserModel) -> str:
+    return create_access_token(
+        user.id,
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+
+def _lookup_user(session, identifier: str) -> UserModel | None:
+    """Resolve email address or phone number to a User."""
+    if "@" in identifier:
+        return session.query(UserModel).filter(UserModel.email == identifier).first()
+    digits = "".join(c for c in identifier if c.isdigit())
+    return session.query(UserModel).filter(UserModel.phone == digits).first()
+
+
+# ── Password login ────────────────────────────────────────────────────────────
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     request: Request,
     session: SessionDep,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
+    """Password login. Accepts email or phone as username."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
+    if not is_method_enabled(session, "password"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password login is disabled. Please use OTP login.",
+        )
+
+    user = _lookup_user(session, form_data.username)
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect credentials")
+
+    check_user_status(user)
+
+    return LoginResponse(
+        access_token=_issue_token(user),
+        token_type="bearer",
+        user=User.model_validate(user),
+    )
+
+
+# ── OTP schemas ───────────────────────────────────────────────────────────────
+
+class OTPRequestBody(BaseModel):
+    """identifier: email address OR phone number with country code (e.g. 233543460633)"""
+    identifier: str
+
+    @field_validator("identifier")
+    @classmethod
+    def strip_identifier(cls, v: str) -> str:
+        return v.strip()
+
+
+class OTPVerifyBody(BaseModel):
+    """identifier: email address OR phone number"""
+    identifier: str
+    code: str
+
+    @field_validator("identifier")
+    @classmethod
+    def strip_identifier(cls, v: str) -> str:
+        return v.strip()
+
+
+# ── OTP request ───────────────────────────────────────────────────────────────
+
+@router.post("/otp/request", status_code=status.HTTP_202_ACCEPTED)
+async def request_otp(
+    request: Request,
+    session: SessionDep,
+    body: OTPRequestBody,
+) -> Any:
     """
-    OAuth2 compatible token login, get an access token for future requests.
+    Request a one-time login code.
+    One code is generated and sent to ALL available channels simultaneously:
+      - Email (if otp_email_enabled and user has an email)
+      - SMS   (if otp_sms_enabled and user has a phone number)
+
+    Always returns 202 regardless of outcome (anti-enumeration).
     """
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(client_ip)
 
-    user = session.query(UserModel).filter(
-        UserModel.email == form_data.username
-    ).first()
-
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # At least one OTP method must be enabled
+    email_enabled = is_method_enabled(session, "otp_email")
+    sms_enabled = is_method_enabled(session, "otp_sms")
+    if not email_enabled and not sms_enabled:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="OTP login is not enabled on this system.",
         )
-    
-    # Check user status using centralized function
-    check_user_status(user)
 
-    # Generate access token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        user.id,
-        expires_delta=access_token_expires
-    )
-    
-    return LoginResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user=User.model_validate(user)
-    )
+    user = _lookup_user(session, body.identifier)
 
-@router.get("/me", response_model=User)
-async def read_users_me(
-    current_user: CurrentUser,
+    if not user or user.status == UserStatus.DISABLED:
+        return {"message": "If that account exists, a code has been sent."}
+
+    raw_code = generate_otp(session, user)
+    session.commit()
+
+    # Send to every available channel in parallel — fire and forget failures
+    if email_enabled:
+        await send_otp_email(user, raw_code)
+
+    if sms_enabled and user.phone:
+        send_otp_sms(user, raw_code)
+
+    return {"message": "If that account exists, a code has been sent."}
+
+
+# ── OTP verify ────────────────────────────────────────────────────────────────
+
+@router.post("/otp/verify", response_model=LoginResponse)
+async def verify_otp_login(
+    request: Request,
+    session: SessionDep,
+    body: OTPVerifyBody,
 ) -> Any:
     """
-    Get current user.
+    Verify a one-time code and receive a JWT token.
+    identifier: email or phone number.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
+    user = _lookup_user(session, body.identifier)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid code")
+
+    if user.status == UserStatus.DISABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled.")
+
+    if not verify_otp(session, user, raw_code=body.code):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired code")
+
+    session.commit()
+
+    return LoginResponse(
+        access_token=_issue_token(user),
+        token_type="bearer",
+        user=User.model_validate(user),
+    )
+
+
+# ── Current user ──────────────────────────────────────────────────────────────
+
+@router.get("/me", response_model=User)
+async def read_users_me(current_user: CurrentUser) -> Any:
     return User.model_validate(current_user)
+
 
 @router.post("/test-token", response_model=User)
 async def test_token(current_user: CurrentUser) -> Any:
-    """
-    Test access token.
-    """
     return User.model_validate(current_user)
 
 
+# ── Password reset ────────────────────────────────────────────────────────────
 
 @router.post("/reset-password", response_model=PasswordResetResponse)
-async def reset_password(
-    reset_data: PasswordResetRequest,
-    session: SessionDep,
-) -> Any:
-    """
-    Reset password for users with RESET_REQUIRED status.
-    Validates temp password and sets new password, then auto-logs in the user.
-    """
-    # Find user by email
-    user = session.query(UserModel).filter(
-        UserModel.email == reset_data.email
-    ).first()
-    
+async def reset_password(reset_data: PasswordResetRequest, session: SessionDep) -> Any:
+    """First-login password reset. Requires the temporary password set by admin."""
+    user = session.query(UserModel).filter(UserModel.email == reset_data.email).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    
-    # Check if user status is RESET_REQUIRED
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     if user.status != UserStatus.RESET_REQUIRED:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password reset not required for this user",
-        )
-    
-    # Verify temp password
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Password reset not required for this user")
+
     if not verify_password(reset_data.temp_password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid temporary password",
-        )
-    
-    # Update user with new password and set status to ACTIVE
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Invalid temporary password")
+
     user.hashed_password = get_password_hash(reset_data.new_password)
     user.status = UserStatus.ACTIVE
-    
-    # Commit the changes
-    session.add(user)
     session.commit()
     session.refresh(user)
-    
-    # Generate access token for auto-login
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        user.id,
-        expires_delta=access_token_expires
-    )
-    
+
     return PasswordResetResponse(
         message="Password reset successful. You are now logged in.",
-        access_token=access_token,
+        access_token=_issue_token(user),
         token_type="bearer",
-        user=User.model_validate(user)
+        user=User.model_validate(user),
     )
-    
-

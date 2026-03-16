@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session, joinedload, relationship
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, OutstationScope, require_permission, is_admin
+from app.models.parish import ChurchUnit
 from app.models.common import MembershipStatus
 from app.models.society import Society, SocietyLeadership, LeadershipRole, MeetingFrequency
 from app.models.parishioner import Parishioner
@@ -147,6 +148,8 @@ def society_to_dict(society, session=None, include_leadership=True, include_memb
         "name": society.name,
         "description": society.description,
         "date_inaugurated": society.date_inaugurated,
+        "church_unit_id": society.church_unit_id,
+        "church_unit_name": society.church_unit.name if society.church_unit else None,
         "meeting_frequency": society.meeting_frequency,
         "meeting_day": society.meeting_day,
         "meeting_time": society.meeting_time,
@@ -167,54 +170,53 @@ def society_to_dict(society, session=None, include_leadership=True, include_memb
     return result
 
 # Society endpoints
-@router.post("", response_model=APIResponse, status_code=201)
+@router.post("", response_model=APIResponse, status_code=201,
+             dependencies=[require_permission("society:write")])
 async def create_new_society(
     *,
     session: SessionDep,
     society: SocietyCreate,
     current_user: CurrentUser,
+    outstation_scope: OutstationScope,
 ) -> Any:
-    """
-    Create a new society with all necessary details.
-    
-    Returns the created society instance.
-    """
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
+    """Create a new society. Unit-scoped users can only create societies for their church unit."""
+    # Enforce church unit scope
+    effective_church_unit_id = society.church_unit_id
+    if outstation_scope is not None:
+        effective_church_unit_id = outstation_scope  # override with user's scoped church unit
+
+    # Default to main parish if still unset
+    if effective_church_unit_id is None:
+        from app.models.parish import ChurchUnitType
+        main_parish = session.query(ChurchUnit).filter(ChurchUnit.type == ChurchUnitType.PARISH).first()
+        if main_parish:
+            effective_church_unit_id = main_parish.id
+
+    if effective_church_unit_id is not None:
+        if not session.query(ChurchUnit).filter(ChurchUnit.id == effective_church_unit_id).first():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Church unit not found")
+
     try:
-        # Check if society with this name already exists
-        existing_society = session.query(Society).filter(
-            Society.name == society.name
-        ).first()
-        
+        existing_society = session.query(Society).filter(Society.name == society.name).first()
         if existing_society:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A society with this name already exists"
             )
-        
-        # Convert to dict first to prevent field issues
+
         society_data = society.model_dump(exclude_unset=True)
-        
-        # Create society from input data 
+        society_data["church_unit_id"] = effective_church_unit_id
         db_society = Society(**society_data)
-        
+
         session.add(db_society)
         session.commit()
         session.refresh(db_society)
-        
-        # Convert to dict for Pydantic model
-        society_dict = society_to_dict(db_society, session)
-        
+
         return APIResponse(
             message="Society created successfully",
-            data=society_dict  # Use dict instead of directly passing the ORM model
+            data=society_to_dict(db_society, session)
         )
-    
+
     except IntegrityError as e:
         session.rollback()
         logger.error(f"Database integrity error: {str(e)}")
@@ -222,6 +224,8 @@ async def create_new_society(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Database integrity error. Possible duplicate society name."
         )
+    except HTTPException:
+        raise
     except Exception as e:
         session.rollback()
         logger.error(f"Error creating society: {str(e)}")
@@ -230,50 +234,45 @@ async def create_new_society(
             detail=str(e)
         )
 
-@router.get("/all", response_model=APIResponse)
+@router.get("/all", response_model=APIResponse,
+            dependencies=[require_permission("society:read")])
 async def read_societies(
     *,
     session: SessionDep,
     current_user: CurrentUser,
+    outstation_scope: OutstationScope,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    church_unit_id: Optional[int] = Query(None, description="Filter by church unit"),
 ) -> Any:
-    """
-    Get list of all societies with pagination and optional search.
-    """
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    
+    """List societies. Station-scoped users automatically see only their station's societies."""
     try:
-        # Build the query
         query = session.query(Society)
-        
+
+        # Unit-scoped users only see their church unit; global admins can filter optionally
+        if outstation_scope is not None:
+            query = query.filter(Society.church_unit_id == outstation_scope)
+        elif church_unit_id is not None:
+            query = query.filter(Society.church_unit_id == church_unit_id)
+
         if search:
             query = query.filter(Society.name.ilike(f"%{search}%"))
-        
-        # Get total count for pagination
+
         total_count = query.count()
-        
-        # Apply pagination
         societies = query.offset(skip).limit(limit).all()
-        
-        # Convert each society to dict
         result = [society_to_dict(society, session) for society in societies]
-        
+
         return APIResponse(
             message=f"Retrieved {len(result)} societies",
             data={
                 "total": total_count,
-                "societies": result,
+                "items": result,
                 "skip": skip,
                 "limit": limit
             }
         )
-    
+
     except Exception as e:
         logger.error(f"Error fetching societies: {str(e)}")
         raise HTTPException(
@@ -291,7 +290,7 @@ async def read_society(
     """
     Get detailed information about a specific society.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -323,7 +322,8 @@ async def read_society(
             detail=str(e)
         )
 
-@router.put("/{society_id}", response_model=APIResponse)
+@router.put("/{society_id}", response_model=APIResponse,
+            dependencies=[require_permission("society:write")])
 async def update_existing_society(
     *,
     session: SessionDep,
@@ -331,14 +331,7 @@ async def update_existing_society(
     society_id: int,
     society_update: SocietyUpdate
 ) -> Any:
-    """
-    Update an existing society's information.
-    """
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    """Update an existing society's information."""
     
     try:
         db_society = session.query(Society).filter(Society.id == society_id).first()
@@ -390,21 +383,15 @@ async def update_existing_society(
             detail=str(e)
         )
 
-@router.delete("/{society_id}", status_code=204)
+@router.delete("/{society_id}", status_code=204,
+               dependencies=[require_permission("society:write")])
 async def delete_existing_society(
     *,
     session: SessionDep,
     current_user: CurrentUser,
     society_id: int
 ) -> None:
-    """
-    Delete an existing society.
-    """
-    if current_user.role not in ["super_admin", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    """Delete an existing society."""
     
     try:
         db_society = session.query(Society).filter(Society.id == society_id).first()
@@ -442,7 +429,7 @@ async def add_leadership_position(
     """
     Add a leadership position to a society.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -566,7 +553,7 @@ async def get_leadership(
     """
     Get all leadership positions for a society.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -608,7 +595,7 @@ async def update_leadership_position(
     """
     Update a leadership position for a society.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -728,7 +715,7 @@ async def delete_leadership_position(
     """
     Delete a leadership position from a society.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -776,7 +763,7 @@ async def add_members_to_society(
     Members can be added with a specific join date, otherwise the current date is used.
     Each member is added with 'active' status by default.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -872,7 +859,7 @@ async def remove_members_from_society(
     """
     Remove members from a society.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -949,7 +936,7 @@ async def get_members_of_society(
     """
     Get members of a society with pagination and optional search and status filtering.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -1014,7 +1001,7 @@ async def update_member_status(
     """
     Update a member's status in the society.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -1108,7 +1095,7 @@ async def get_members_by_status(
     """
     Get society members filtered by status.
     """
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

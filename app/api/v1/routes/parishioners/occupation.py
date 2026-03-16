@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, is_admin
 from app.models.parishioner import Parishioner, Occupation
 from app.schemas.common import APIResponse
 from app.schemas.parishioner import OccupationCreate, OccupationRead, OccupationUpdate
@@ -39,7 +39,7 @@ async def create_occupation(
     current_user: CurrentUser,
 ) -> Any:
     """Create or replace occupation for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -133,7 +133,7 @@ async def update_occupation(
     current_user: CurrentUser,
 ) -> Any:
     """Update occupation for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -190,7 +190,7 @@ async def delete_occupation(
     current_user: CurrentUser,
 ) -> Any:
     """Delete occupation for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

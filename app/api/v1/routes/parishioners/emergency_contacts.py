@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Path
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, is_admin
 from app.models.parishioner import EmergencyContact, Parishioner, Occupation
 from app.schemas.common import APIResponse
 from app.schemas.parishioner import EmergencyContactCreate, EmergencyContactRead, EmergencyContactUpdate, OccupationCreate, OccupationRead, OccupationUpdate
@@ -42,7 +42,7 @@ async def create_emergency_contact(
     current_user: CurrentUser,
 ) -> Any:
     """Create a new emergency contact for a parishioner (limit 3 per parishioner)."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -160,7 +160,7 @@ async def update_emergency_contact(
     current_user: CurrentUser,
 ) -> Any:
     """Update an emergency contact for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -219,7 +219,7 @@ async def delete_emergency_contact(
     contact_id: int = Path(..., title="The ID of the emergency contact to delete"),
 ) -> Any:
     """Delete an emergency contact for a parishioner."""
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -273,7 +273,7 @@ async def batch_update_emergency_contacts(
     Replace all existing emergency contacts of a parishioner with the new batch.
     """
     # Check permissions
-    if current_user.role not in ["super_admin", "admin"]:
+    if not is_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

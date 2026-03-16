@@ -105,9 +105,68 @@ CurrentUser = Annotated[UserModel, Depends(get_current_user)]
 
 
 def get_current_active_superuser(current_user: CurrentUser) -> UserModel:
-    if current_user.role != "super_admin":
+    if current_user.role_ref is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No role assigned to this user.",
+        )
+    user_permissions = {p.code for p in current_user.role_ref.permissions}
+    if "admin:all" not in user_permissions:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient privileges. This action requires super admin access.",
         )
     return current_user
+
+
+def require_permission(permission_code: str):
+    """Dependency factory that checks if the current user has a specific permission."""
+    def _checker(current_user: Annotated[UserModel, Depends(get_current_user)]) -> UserModel:
+        if current_user.role_ref is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No role assigned to this user",
+            )
+        user_permissions = {p.code for p in current_user.role_ref.permissions}
+        # super_admin bypass: if user has admin:all they can do everything
+        if "admin:all" in user_permissions or permission_code in user_permissions:
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission denied: {permission_code} required",
+        )
+    return Depends(_checker)
+
+
+def is_super_admin(current_user: CurrentUser) -> bool:
+    """Check if user is super admin (has admin:all permission)."""
+    if current_user.role_ref is None:
+        return False
+    return any(p.code == "admin:all" for p in current_user.role_ref.permissions)
+
+
+def is_admin(user: "UserModel") -> bool:
+    """True for super_admin or any user with admin:all permission."""
+    if user.role_ref is None:
+        return False
+    return any(p.code == "admin:all" for p in user.role_ref.permissions)
+
+
+def get_church_unit_scope(current_user: CurrentUser) -> int | None:
+    """
+    Returns the church_unit_id the current user is scoped to, or None if they
+    have parish-wide access (super_admin / parish_admin / no unit restriction).
+    Use this in routes to filter queries: if scope: query.filter(Model.church_unit_id == scope)
+    """
+    if is_super_admin(current_user):
+        return None
+    return current_user.church_unit_id
+
+
+OutstationScope = Annotated[int | None, Depends(get_church_unit_scope)]
+ChurchUnitScope = Annotated[int | None, Depends(get_church_unit_scope)]
+
+RequireSuperAdmin = require_permission("admin:all")
+RequireParishAdmin = require_permission("admin:parish")
+RequireManageUsers = require_permission("user:write")
+RequireManageRoles = require_permission("admin:roles")
