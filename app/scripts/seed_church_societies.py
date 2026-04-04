@@ -176,7 +176,7 @@ def seed_societies():
             "meeting_venue": "Media Room"
         },
         {
-            "name": "St Gabriel Ga-Dangme Guild",
+            "name": "St. Gabriel Ga-Dangme Guild",
             "description": "A cultural and spiritual society for Ga-Dangme-speaking Catholics that preserves traditions while fostering faith development.",
             "date_inaugurated": date(1996, 4, 12),
             "meeting_frequency": MeetingFrequency.MONTHLY,
@@ -210,7 +210,188 @@ def seed_societies():
             "meeting_day": "Monday",
             "meeting_time": time(18, 0),
             "meeting_venue": "Conference Room A"
-        }
+        },  
+        {
+        "name": "Trinity Choir",
+        "description": "A secondary choir group that provides music ministry for various parish liturgies and special occasions.",
+        "date_inaugurated": date(2000, 3, 15),
+        "meeting_frequency": MeetingFrequency.WEEKLY,
+        "meeting_day": "Thursday",
+        "meeting_time": time(19, 0),
+        "meeting_venue": "Music Room"
+    },
+    {
+        "name": "Young Christian Workers (YCW)",
+        "description": "A movement for young working people that aims to develop leadership skills and promote social justice in the workplace.",
+        "date_inaugurated": date(1987, 5, 1),
+        "meeting_frequency": MeetingFrequency.BIWEEKLY,
+        "meeting_day": "Saturday",
+        "meeting_time": time(15, 0),
+        "meeting_venue": "Youth Hall"
+    },
+    {
+        "name": "Catholic Women Council",
+        "description": "An organization of Catholic women dedicated to spiritual growth, family values, and community service.",
+        "date_inaugurated": date(1989, 8, 15),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Second Saturday",
+        "meeting_time": time(14, 0),
+        "meeting_venue": "Women's Center"
+    },
+    {
+        "name": "St. Anthony Guild",
+        "description": "A devotional society dedicated to St. Anthony of Padua, focusing on prayer, charity, and assistance to the poor.",
+        "date_inaugurated": date(1990, 6, 13),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Second Tuesday",
+        "meeting_time": time(18, 0),
+        "meeting_venue": "St. Anthony Chapel"
+    },
+    {
+        "name": "Catholic Association of Media Practitioners",
+        "description": "A professional association for Catholic media practitioners promoting ethical journalism and faith-based communication.",
+        "date_inaugurated": date(2004, 9, 29),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Last Friday",
+        "meeting_time": time(19, 0),
+        "meeting_venue": "Media Center"
+    },
+    {
+        "name": "Friday Borns Association",
+        "description": "A social and spiritual fellowship for parishioners born on Friday, promoting unity and mutual support.",
+        "date_inaugurated": date(1995, 7, 21),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "First Friday",
+        "meeting_time": time(17, 0),
+        "meeting_venue": "Community Room"
+    },
+    {
+        "name": "Mass Servers Guild",
+        "description": "A ministry that trains and coordinates altar servers for liturgical celebrations in the parish.",
+        "date_inaugurated": date(1985, 8, 24),
+        "meeting_frequency": MeetingFrequency.WEEKLY,
+        "meeting_day": "Saturday",
+        "meeting_time": time(9, 0),
+        "meeting_venue": "Sacristy"
+    },
+    {
+        "name": "Catechists Association",
+        "description": "A group of trained catechists dedicated to religious education and faith formation in the parish.",
+        "date_inaugurated": date(1982, 10, 12),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Third Saturday",
+        "meeting_time": time(10, 0),
+        "meeting_venue": "Education Center"
+    },
+    {
+        "name": "Eucharistic Ministers",
+        "description": "A ministry of lay people authorized to assist in the distribution of Holy Communion during Mass.",
+        "date_inaugurated": date(1987, 4, 5),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "First Saturday",
+        "meeting_time": time(11, 0),
+        "meeting_venue": "Church"
+    },
+    {
+        "name": "Drama Ministry",
+        "description": "A creative ministry that uses drama and theater to evangelize and educate the parish community.",
+        "date_inaugurated": date(2001, 12, 26),
+        "meeting_frequency": MeetingFrequency.WEEKLY,
+        "meeting_day": "Friday",
+        "meeting_time": time(18, 0),
+        "meeting_venue": "Drama Hall"
+    },
+    {
+        "name": "Parish Welfare Committee",
+        "description": "A committee dedicated to coordinating welfare activities and assistance programs for parishioners in need.",
+        "date_inaugurated": date(1984, 11, 1),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Third Wednesday",
+        "meeting_time": time(18, 30),
+        "meeting_venue": "Parish Office"
+    },
+    {
+        "name": "Sunday School Ministry",
+        "description": "An educational ministry providing religious instruction for children and youth on Sundays.",
+        "date_inaugurated": date(1980, 9, 7),
+        "meeting_frequency": MeetingFrequency.WEEKLY,
+        "meeting_day": "Sunday",
+        "meeting_time": time(9, 0),
+        "meeting_venue": "Sunday School Hall"
+    },
+    {
+        "name": "Youth Choir",
+        "description": "A choir specifically for young people that provides music ministry for youth Masses and events.",
+        "date_inaugurated": date(1998, 4, 19),
+        "meeting_frequency": MeetingFrequency.WEEKLY,
+        "meeting_day": "Saturday",
+        "meeting_time": time(14, 0),
+        "meeting_venue": "Youth Music Room"
+    },
+    {
+        "name": "Women's Fellowship",
+        "description": "A fellowship group for women focusing on spiritual growth, mutual support, and community service.",
+        "date_inaugurated": date(1991, 3, 8),
+        "meeting_frequency": MeetingFrequency.BIWEEKLY,
+        "meeting_day": "Tuesday",
+        "meeting_time": time(16, 0),
+        "meeting_venue": "Fellowship Hall"
+    },
+    {
+        "name": "Christian Men's Fellowship",
+        "description": "A fellowship group for men dedicated to spiritual growth, brotherhood, and service to the parish.",
+        "date_inaugurated": date(1993, 6, 29),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Second Sunday",
+        "meeting_time": time(16, 30),
+        "meeting_venue": "Men's Hall"
+    },
+    {
+        "name": "St. Michael Ewe Society",
+        "description": "A cultural and spiritual society for Ewe-speaking Catholics honoring St. Michael the Archangel.",
+        "date_inaugurated": date(1996, 9, 29),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Last Sunday",
+        "meeting_time": time(15, 0),
+        "meeting_venue": "Cultural Hall"
+    },
+    {
+        "name": "St. Paul Dagaaba Society",
+        "description": "A cultural and spiritual society for Dagaaba-speaking Catholics dedicated to St. Paul the Apostle.",
+        "date_inaugurated": date(2000, 6, 29),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Fourth Saturday",
+        "meeting_time": time(16, 0),
+        "meeting_venue": "Cultural Center"
+    },
+    {
+        "name": "Francophone Community",
+        "description": "A community for French-speaking Catholics providing pastoral care and cultural activities.",
+        "date_inaugurated": date(2005, 7, 14),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Second Sunday",
+        "meeting_time": time(17, 0),
+        "meeting_venue": "International Hall"
+    },
+    {
+        "name": "Care Givers Ministry",
+        "description": "A ministry dedicated to providing care and support to the sick, elderly, and vulnerable members of the parish.",
+        "date_inaugurated": date(2002, 2, 11),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "First Sunday",
+        "meeting_time": time(13, 0),
+        "meeting_venue": "Care Center"
+    },
+    {
+        "name": "Parish Secretariat",
+        "description": "A team that provides administrative and secretarial support for various parish activities and committees.",
+        "date_inaugurated": date(1988, 1, 20),
+        "meeting_frequency": MeetingFrequency.MONTHLY,
+        "meeting_day": "Fourth Monday",
+        "meeting_time": time(18, 0),
+        "meeting_venue": "Administration Office"
+    },
+  
     ]
     
     with db.session() as session:

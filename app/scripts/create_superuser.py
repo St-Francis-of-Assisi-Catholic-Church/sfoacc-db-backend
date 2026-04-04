@@ -1,7 +1,8 @@
 import logging
 from sqlalchemy import text
 from app.core.database import db
-from app.models.user import User, UserRole, UserStatus
+from app.models.user import User, UserStatus, LoginMethod
+from app.models.rbac import Role
 from app.core.security import get_password_hash
 from app.core.config import settings
 import os
@@ -47,16 +48,29 @@ def create_superuser():
             ).first()
             
             if existing_user:
+                # Update phone if it wasn't set yet
+                if not existing_user.phone and settings.FIRST_SUPERUSER_PHONE:
+                    existing_user.phone = settings.FIRST_SUPERUSER_PHONE
+                    session.commit()
+                    logger.info(f"Updated phone for {settings.FIRST_SUPERUSER}")
                 logger.info(f"Superuser {settings.FIRST_SUPERUSER} already exists")
                 return True
+
+            # Look up the super_admin role
+            super_admin_role = session.query(Role).filter(Role.name == "super_admin").first()
+            role_id = super_admin_role.id if super_admin_role else None
+
+            phone = settings.FIRST_SUPERUSER_PHONE or None
 
             # Create new superuser
             superuser = User(
                 email=settings.FIRST_SUPERUSER,
                 full_name="Super Admin",
+                phone=phone,
+                login_method=LoginMethod.PASSWORD,
                 hashed_password=get_password_hash(settings.FIRST_SUPERUSER_PASSWORD),
-                role=UserRole.SUPER_ADMIN.value,
-                status = UserStatus.ACTIVE
+                role_id=role_id,
+                status=UserStatus.ACTIVE,
             )
             
             session.add(superuser)
@@ -77,7 +91,8 @@ def verify_superuser():
             ).first()
             
             if superuser:
-                logger.info(f"Verified superuser: {superuser.email} ({settings.FIRST_SUPERUSER}) ({settings.FIRST_SUPERUSER_PASSWORD}) (role: {superuser.role})")
+                role_name = superuser.role_ref.name if superuser.role_ref else "no role"
+                logger.info(f"Verified superuser: {superuser.email} ({settings.FIRST_SUPERUSER}) ({settings.FIRST_SUPERUSER_PASSWORD}) (role: {role_name})")
                 return True
             
             logger.error("Superuser verification failed: User not found")

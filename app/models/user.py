@@ -1,18 +1,39 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
-from sqlalchemy import UUID, Boolean, Column, DateTime, Integer, String, Enum, func, text, event
+from sqlalchemy import UUID, Column, DateTime, String, Integer, ForeignKey, Enum, func, event
 import enum
+from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
 
-class UserRole(str, enum.Enum):
-    SUPER_ADMIN = "super_admin"
-    ADMIN = "admin"
-    USER = "user"
+
+class UserChurchUnit(Base):
+    """
+    A user's membership in a church unit, with a unit-specific role.
+    A user can belong to multiple units, each with a different role.
+    e.g. user is 'parish_admin' in St Francis but only 'viewer' in St Andrews.
+    """
+    __tablename__ = "user_church_units"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    church_unit_id = Column(Integer, ForeignKey("church_units.id", ondelete="CASCADE"), primary_key=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
+
+    user = db_relationship("User", back_populates="unit_memberships")
+    church_unit = db_relationship("ChurchUnit")
+    role = db_relationship("Role")
+
 
 class UserStatus(str, enum.Enum):
     ACTIVE = "active"
     DISABLED = "disabled"
     RESET_REQUIRED = "reset_required"
+
+
+class LoginMethod(str, enum.Enum):
+    PASSWORD = "password"
+    EMAIL_OTP = "email_otp"
+    SMS_OTP = "sms_otp"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -21,30 +42,40 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.USER.value)
+    phone = Column(String(20), nullable=True, index=True)  # digits + country code, e.g. 233543460633
+    login_method = Column(
+        Enum(LoginMethod),
+        nullable=False,
+        default=LoginMethod.PASSWORD,
+        server_default=LoginMethod.PASSWORD.value,
+    )
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=True, index=True)
     status = Column(
         Enum(UserStatus),
         nullable=False,
-        default=UserStatus.RESET_REQUIRED.value,  # New users need to reset their password
+        default=UserStatus.RESET_REQUIRED.value,
     )
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
-        server_default=func.now()
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
     )
     updated_at = Column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
         server_default=func.now(),
-        onupdate=datetime.utcnow
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    role_ref = db_relationship("Role", back_populates="users")
+    unit_memberships = db_relationship("UserChurchUnit", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.email}>"
-    
-@event.listens_for(User, 'before_update')
+
+
+@event.listens_for(User, "before_update")
 def receive_before_update(mapper, connection, target):
-    target.updated_at = datetime.utcnow()
+    target.updated_at = datetime.now(timezone.utc)

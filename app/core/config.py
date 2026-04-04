@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     # API Settings
     API_V1_STR: str = "/api/v1"
+    VERSION: str = "1.0.0"
     PROJECT_NAME: str
     DOMAIN: str
     BACKEND_HOST: str
@@ -42,7 +43,16 @@ class Settings(BaseSettings):
 
     # Security
     SECRET_KEY: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8 hours
+
+    # Upload limits
+    MAX_UPLOAD_SIZE_MB: int = 10
+
+    # Database pool settings
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_TIMEOUT: int = 60
+    DB_POOL_RECYCLE: int = 1800
     
     # CORS Configuration
     # BACKEND_CORS_ORIGINS: List[str] = []
@@ -79,6 +89,8 @@ class Settings(BaseSettings):
     # First Admin User
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
+    FIRST_SUPERUSER_PHONE: str = ""   # digits + country code, e.g. 233543460633
+    SUPER_ADMIN_EMAIL: str = "database.sfoacc@gmail.com"
 
     @property
     def database_url(self) -> str:

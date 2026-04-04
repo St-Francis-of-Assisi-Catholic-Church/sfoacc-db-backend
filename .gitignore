@@ -17,3 +17,8 @@ htmlcov
 .env
 .env.staging
 .env.production
+
+# Database dumps — store in dumps/ but never commit
+dumps/*.sql
+dumps/*.dump
+dumps/*.gz

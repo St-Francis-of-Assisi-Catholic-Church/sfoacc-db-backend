@@ -133,21 +133,21 @@ class VerificationPageGenerator:
             
         occupation_info = cls._format_detail_section(occupation_items)
         
-        # Get place of worship and church community names
-        place_of_worship_name = None
+        # Get station and church community names
+        station_name = None
         church_community_name = None
-        
-        if hasattr(parishioner, 'place_of_worship') and parishioner.place_of_worship:
-            place_of_worship_name = parishioner.place_of_worship.name
-        
+
+        if hasattr(parishioner, 'church_unit') and parishioner.church_unit:
+            station_name = parishioner.church_unit.name
+
         if hasattr(parishioner, 'church_community') and parishioner.church_community:
             church_community_name = parishioner.church_community.name
-        
+
         # Church Information
         church_info = cls._format_detail_section([
             {"label": "Old Church ID", "value": parishioner.old_church_id},
             {"label": "New Church ID", "value": parishioner.new_church_id},
-            {"label": "Place of Worship", "value": place_of_worship_name},
+            {"label": "Station", "value": station_name},
             {"label": "Church Community", "value": church_community_name},
             {"label": "Membership Status", "value": parishioner.membership_status.value if parishioner.membership_status else None},
             {"label": "Verification Status", "value": parishioner.verification_status.value if parishioner.verification_status else None},
