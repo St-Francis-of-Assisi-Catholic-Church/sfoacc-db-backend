@@ -217,7 +217,7 @@ Then add these secrets at:
 | Secret | Value |
 |---|---|
 | `SERVER_HOST` | Your static IP address |
-| `SERVER_USER` | `ubuntu` |
+| `SERVER_USER` | `root` |
 | `SERVER_SSH_KEY` | The full output of `cat ~/.ssh/sfoacc_deploy` (private key) |
 
 After this, every push to `main` triggers:
