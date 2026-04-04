@@ -10,106 +10,173 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 PERMISSIONS = [
-    # Parishioners
+    # ── Parishioners ──────────────────────────────────────────────────────────
     {"code": "parishioner:read",        "name": "View Parishioners",                "module": "parishioners"},
     {"code": "parishioner:write",       "name": "Create/Edit Parishioners",         "module": "parishioners"},
     {"code": "parishioner:delete",      "name": "Delete Parishioners",              "module": "parishioners"},
     {"code": "parishioner:import",      "name": "Import Parishioners (CSV)",        "module": "parishioners"},
     {"code": "parishioner:generate_id", "name": "Generate Church IDs",              "module": "parishioners"},
-    {"code": "parishioner:verify",      "name": "Verify Parishioner Records",       "module": "parishioners"},
-    # Societies
+    {"code": "parishioner:verify",      "name": "Send Verification Codes",          "module": "parishioners"},
+    # ── Societies ─────────────────────────────────────────────────────────────
     {"code": "society:read",            "name": "View Societies",                   "module": "societies"},
-    {"code": "society:write",           "name": "Manage Societies",                 "module": "societies"},
+    {"code": "society:write",           "name": "Create/Edit Societies",            "module": "societies"},
+    {"code": "society:delete",          "name": "Delete Societies",                 "module": "societies"},
     {"code": "society:membership",      "name": "Manage Society Membership",        "module": "societies"},
-    # Users
-    {"code": "user:read",               "name": "View Users",                       "module": "users"},
-    {"code": "user:write",              "name": "Create/Edit Users",                "module": "users"},
-    {"code": "user:delete",             "name": "Delete Users",                     "module": "users"},
-    # Admin – system / parish level
+    # ── Church Communities ────────────────────────────────────────────────────
+    {"code": "community:read",          "name": "View Church Communities",          "module": "communities"},
+    {"code": "community:write",         "name": "Create/Edit Church Communities",   "module": "communities"},
+    {"code": "community:delete",        "name": "Delete Church Communities",        "module": "communities"},
+    {"code": "community:membership",    "name": "Manage Community Membership",      "module": "communities"},
+    # ── Church Units ──────────────────────────────────────────────────────────
+    {"code": "church_unit:read",        "name": "View Church Units & Outstations",  "module": "church_units"},
+    # ── App Users ─────────────────────────────────────────────────────────────
+    {"code": "user:read",               "name": "View App Users",                   "module": "users"},
+    {"code": "user:write",              "name": "Create/Edit App Users",            "module": "users"},
+    {"code": "user:delete",             "name": "Delete App Users",                 "module": "users"},
+    # ── Messaging ─────────────────────────────────────────────────────────────
+    {"code": "messaging:read",          "name": "View Message History & Templates", "module": "messaging"},
+    {"code": "messaging:send",          "name": "Send Bulk Messages",               "module": "messaging"},
+    # ── Statistics & Reporting ────────────────────────────────────────────────
+    {"code": "statistics:read",         "name": "View Statistics & Dashboards",     "module": "statistics"},
+    {"code": "reporting:read",          "name": "View Reports & Exports",           "module": "reporting"},
+    # ── Finance ───────────────────────────────────────────────────────────────
+    {"code": "finance:read",            "name": "View Financial Records",           "module": "finance"},
+    {"code": "finance:write",           "name": "Manage Financial Records",         "module": "finance"},
+    # ── Admin – system / parish level ─────────────────────────────────────────
     {"code": "admin:all",               "name": "Full System Admin Access",         "module": "admin"},
     {"code": "admin:parish",            "name": "Manage Parish Info",               "module": "admin"},
     {"code": "admin:outstations",       "name": "Manage All Outstations",           "module": "admin"},
+    {"code": "admin:outstation",        "name": "Manage Own Outstation",            "module": "admin"},
     {"code": "admin:settings",          "name": "Manage Parish Settings",           "module": "admin"},
     {"code": "admin:roles",             "name": "Manage Roles & Permissions",       "module": "admin"},
-    # Admin – outstation level (scoped to user's own outstation)
-    {"code": "admin:outstation",        "name": "Manage Own Outstation",            "module": "admin"},
-    # Statistics / reporting
-    {"code": "statistics:read",         "name": "View Statistics",                  "module": "statistics"},
-    {"code": "reporting:read",          "name": "View Reports & Exports",           "module": "reporting"},
-    # Messaging
-    {"code": "messaging:send",          "name": "Send Bulk Messages",               "module": "messaging"},
-    # Finance
-    {"code": "finance:read",            "name": "View Financial Records",           "module": "finance"},
-    {"code": "finance:write",           "name": "Manage Financial Records",         "module": "finance"},
-    # Auth config (super admin only)
     {"code": "admin:auth_config",       "name": "Configure Login Methods",          "module": "admin"},
 ]
 
 DEFAULT_ROLES = [
+    # ── Super Admin ───────────────────────────────────────────────────────────
+    # Full unrestricted access. The admin:all permission bypasses every other
+    # permission check in the system.
     {
         "name": "super_admin",
         "label": "Super Admin",
-        "description": "Full access to everything across the entire system. Not scoped to any church unit.",
+        "description": (
+            "Full unrestricted access across the entire system. "
+            "Only super admins can manage system-level roles, settings, and auth config."
+        ),
         "is_system": True,
         "permissions": ["admin:all"],
     },
+
+    # ── Church Administrator ──────────────────────────────────────────────────
+    # Full CRUD on all entities within their unit. Can add/edit unit users.
+    # Cannot touch system roles, auth config, or other units.
     {
         "name": "church_administrator",
         "label": "Church Administrator",
         "description": (
-            "Manages all operations for their assigned church unit — parishioners, societies, "
-            "users, mass schedules, and settings. Scoped to one unit."
+            "Full CRUD on parishioners, societies, communities, and messaging within their "
+            "assigned unit. Can add and edit users scoped to their unit. Cannot manage "
+            "system settings or other units."
         ),
         "is_system": True,
         "permissions": [
+            # Parishioners — full
             "parishioner:read", "parishioner:write", "parishioner:delete",
             "parishioner:import", "parishioner:generate_id", "parishioner:verify",
-            "society:read", "society:write", "society:membership",
+            # Societies — full
+            "society:read", "society:write", "society:delete", "society:membership",
+            # Communities — full
+            "community:read", "community:write", "community:delete", "community:membership",
+            # Church units — read only
+            "church_unit:read",
+            # App users — read + write (no delete)
             "user:read", "user:write",
+            # Messaging — full
+            "messaging:read", "messaging:send",
+            # Statistics & reporting
+            "statistics:read", "reporting:read",
+            # Unit admin
             "admin:outstation", "admin:settings",
-            "statistics:read", "messaging:send",
         ],
     },
+
+    # ── Church Secretary ──────────────────────────────────────────────────────
+    # Full CRUD on all church entities. Can only VIEW users, never create/edit.
     {
         "name": "church_secretary",
         "label": "Church Secretary",
         "description": (
-            "Handles parishioner records, church ID generation, and correspondence "
-            "for their assigned church unit."
+            "Full CRUD on parishioners, societies, communities, messaging, and parish records. "
+            "Read-only access to app users — cannot create or edit system accounts."
         ),
         "is_system": True,
         "permissions": [
-            "parishioner:read", "parishioner:write", "parishioner:import",
-            "parishioner:generate_id", "parishioner:verify",
-            "society:read", "society:membership",
-            "statistics:read", "messaging:send",
-        ],
-    },
-    {
-        "name": "church_finance_admin",
-        "label": "Church Finance Admin",
-        "description": (
-            "Manages financial records and reports for their assigned church unit. "
-            "Read-only access to parishioner data."
-        ),
-        "is_system": True,
-        "permissions": [
-            "finance:read", "finance:write",
+            # Parishioners — full
+            "parishioner:read", "parishioner:write", "parishioner:delete",
+            "parishioner:import", "parishioner:generate_id", "parishioner:verify",
+            # Societies — full
+            "society:read", "society:write", "society:delete", "society:membership",
+            # Communities — full
+            "community:read", "community:write", "community:delete", "community:membership",
+            # Church units — read only
+            "church_unit:read",
+            # App users — read only
+            "user:read",
+            # Messaging — full
+            "messaging:read", "messaging:send",
+            # Statistics & reporting
             "statistics:read", "reporting:read",
-            "parishioner:read",
+            # Unit admin
+            "admin:parish", "admin:outstation",
         ],
     },
+
+    # ── Database Management Team ──────────────────────────────────────────────
+    # Data entry focus: parishioner records, ID generation, verification,
+    # society memberships. Can READ church units (needed to assign parishioners).
+    # No user management, no community write, no admin settings.
     {
         "name": "database_management_team",
         "label": "Database Management Team",
         "description": (
-            "Handles data entry and parishioner record management for their assigned church unit. "
-            "Can create and edit parishioner records, import from CSV, and manage society membership."
+            "Data entry and parishioner record management. Can add/edit/import parishioner "
+            "records, generate church IDs, send verifications, and manage society membership. "
+            "Read-only access to church units and communities. No user or admin access."
         ),
         "is_system": True,
         "permissions": [
+            # Parishioners — full except delete
             "parishioner:read", "parishioner:write", "parishioner:import",
-            "society:read", "society:membership",
+            "parishioner:generate_id", "parishioner:verify",
+            # Societies — read, write, membership (no delete)
+            "society:read", "society:write", "society:membership",
+            # Communities — read + membership only
+            "community:read", "community:membership",
+            # Church units — read only (needed to assign parishioners to units)
+            "church_unit:read",
+            # Messaging — send only
+            "messaging:send",
+            # Statistics — view only
+            "statistics:read",
+        ],
+    },
+
+    # ── Finance ───────────────────────────────────────────────────────────────
+    # Read-only across the board. No write access anywhere.
+    {
+        "name": "church_finance_admin",
+        "label": "Finance",
+        "description": (
+            "Read-only access to parishioner data, church unit info, financial records, "
+            "reports, and statistics. Cannot create, edit, or delete any records."
+        ),
+        "is_system": True,
+        "permissions": [
+            "parishioner:read",
+            "church_unit:read",
+            "finance:read",
+            "statistics:read",
+            "reporting:read",
         ],
     },
 ]

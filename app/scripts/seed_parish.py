@@ -22,7 +22,6 @@ def seed_parish():
                 name="St. Francis of Assisi Catholic Church",
                 diocese="Catholic Diocese of Koforidua",
                 address="Accra, Ghana",
-                pastor_name="",
             )
             session.add(parish)
             session.flush()

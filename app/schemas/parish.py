@@ -41,9 +41,6 @@ class ChurchUnitCreate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     established_date: Optional[date] = None
-    pastor_name: Optional[str] = None
-    pastor_email: Optional[str] = None
-    pastor_phone: Optional[str] = None
     location_description: Optional[str] = None
     google_maps_url: Optional[str] = None
     latitude: Optional[float] = None
@@ -61,9 +58,6 @@ class ChurchUnitUpdate(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     established_date: Optional[date] = None
-    pastor_name: Optional[str] = None
-    pastor_email: Optional[str] = None
-    pastor_phone: Optional[str] = None
     location_description: Optional[str] = None
     google_maps_url: Optional[str] = None
     latitude: Optional[float] = None

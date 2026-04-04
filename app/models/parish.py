@@ -45,11 +45,6 @@ class ChurchUnit(Base):
     website = Column(String(200), nullable=True)
     established_date = Column(Date, nullable=True)
 
-    # Parish-level leadership
-    pastor_name = Column(String(200), nullable=True)
-    pastor_email = Column(String(200), nullable=True)
-    pastor_phone = Column(String(50), nullable=True)
-
     # Outstation-specific (nullable for parish-type units)
     location_description = Column(String(500), nullable=True)
     google_maps_url = Column(String(500), nullable=True)
@@ -71,7 +66,6 @@ class ChurchUnit(Base):
     communities = db_relationship("ChurchCommunity", back_populates="church_unit")
     parishioners = db_relationship("Parishioner", back_populates="church_unit")
     societies = db_relationship("Society", back_populates="church_unit")
-    users = db_relationship("User", back_populates="church_unit")
     leadership = db_relationship("ChurchUnitLeadership", back_populates="church_unit", cascade="all, delete-orphan")
     events = db_relationship("ChurchEvent", back_populates="church_unit", cascade="all, delete-orphan")
 

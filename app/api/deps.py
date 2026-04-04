@@ -2,7 +2,7 @@ from collections.abc import Generator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError, api_jwt
 from pydantic import BaseModel, ValidationError
@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import ALGORITHM
 from app.core.database import db
-from app.models.user import User as UserModel, UserStatus
+from app.models.user import User as UserModel, UserStatus, UserChurchUnit
 
 
 class TokenPayload(BaseModel):
@@ -119,17 +119,56 @@ def get_current_active_superuser(current_user: CurrentUser) -> UserModel:
     return current_user
 
 
+def _resolve_permissions(
+    current_user: UserModel,
+    x_church_unit_id: int | None,
+) -> set[str]:
+    """
+    Return the effective permission set for this request.
+
+    - Super admins (admin:all on global role): always full permissions.
+    - Unit selected via header: use the role assigned to the user for THAT unit.
+      Falls back to global role if no unit-specific role is set.
+    - No unit header: use the global role.
+    """
+    global_perms: set[str] = set()
+    if current_user.role_ref:
+        global_perms = {p.code for p in current_user.role_ref.permissions}
+
+    # Super admin bypass — always wins
+    if "admin:all" in global_perms:
+        return global_perms
+
+    if x_church_unit_id is not None:
+        # Find the membership row for the selected unit
+        membership = next(
+            (m for m in current_user.unit_memberships if m.church_unit_id == x_church_unit_id),
+            None,
+        )
+        if membership and membership.role:
+            return {p.code for p in membership.role.permissions}
+        # No unit-specific role — fall back to global role
+        return global_perms
+
+    return global_perms
+
+
 def require_permission(permission_code: str):
-    """Dependency factory that checks if the current user has a specific permission."""
-    def _checker(current_user: Annotated[UserModel, Depends(get_current_user)]) -> UserModel:
-        if current_user.role_ref is None:
+    """
+    Dependency factory that checks if the current user has a specific permission,
+    resolving permissions against the unit selected via X-Church-Unit-Id header.
+    """
+    def _checker(
+        current_user: Annotated[UserModel, Depends(get_current_user)],
+        x_church_unit_id: Annotated[int | None, Header(alias="X-Church-Unit-Id")] = None,
+    ) -> UserModel:
+        if current_user.role_ref is None and not current_user.unit_memberships:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No role assigned to this user",
             )
-        user_permissions = {p.code for p in current_user.role_ref.permissions}
-        # super_admin bypass: if user has admin:all they can do everything
-        if "admin:all" in user_permissions or permission_code in user_permissions:
+        effective_perms = _resolve_permissions(current_user, x_church_unit_id)
+        if "admin:all" in effective_perms or permission_code in effective_perms:
             return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -152,15 +191,38 @@ def is_admin(user: "UserModel") -> bool:
     return any(p.code == "admin:all" for p in user.role_ref.permissions)
 
 
-def get_church_unit_scope(current_user: CurrentUser) -> int | None:
+def get_church_unit_scope(
+    current_user: CurrentUser,
+    x_church_unit_id: Annotated[int | None, Header(alias="X-Church-Unit-Id")] = None,
+) -> int | None:
     """
-    Returns the church_unit_id the current user is scoped to, or None if they
-    have parish-wide access (super_admin / parish_admin / no unit restriction).
-    Use this in routes to filter queries: if scope: query.filter(Model.church_unit_id == scope)
+    Returns the church_unit_id the current user is scoped to, or None for parish-wide access.
+
+    Resolution order:
+    1. Super admins always get None (no scope restriction).
+    2. If the client sends X-Church-Unit-Id header, validate the user has access
+       to that unit (via unit_memberships), then use it.
+    3. If the user has exactly one unit membership, auto-scope to it.
+    4. Multiple memberships and no header → None (caller must send the header).
     """
     if is_super_admin(current_user):
         return None
-    return current_user.church_unit_id
+
+    accessible_ids = {m.church_unit_id for m in current_user.unit_memberships}
+
+    if x_church_unit_id is not None:
+        if x_church_unit_id not in accessible_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to the selected church unit.",
+            )
+        return x_church_unit_id
+
+    # Auto-scope when the user belongs to exactly one unit
+    if len(accessible_ids) == 1:
+        return next(iter(accessible_ids))
+
+    return None
 
 
 OutstationScope = Annotated[int | None, Depends(get_church_unit_scope)]

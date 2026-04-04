@@ -46,10 +46,10 @@ class SMSService:
                 content="Dear {parishioner_name}, welcome to {church_name}! Your church records are being created. We will update you once the process is done. For any inquiries, please contact us at {church_contact}."
             ),
 
-            # Parishion record verification message
+            # Parishioner record verification message
             "record_verification_message": SMSTemplate(
                 name="Parishioner Record Verification",
-                content="Hi {parishioner_name}, please verify your information using this link: {verification_link}. Your access code is your date of birth in the format DDMMYYYY. Please note that the link expires in 48hrs. Thank you."
+                content="Hi {parishioner_name}, verify your church records: {verification_link}\nCode: your date of birth (DDMMYYYY). Expires in 48hrs."
             ),
 
             # confirm record verification message

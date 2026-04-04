@@ -1,9 +1,26 @@
 from datetime import datetime, timezone
 import uuid
-from sqlalchemy import UUID, Boolean, Column, DateTime, String, Integer, ForeignKey, Enum, func, event
+from sqlalchemy import UUID, Column, DateTime, String, Integer, ForeignKey, Enum, func, event
 import enum
 from sqlalchemy.orm import relationship as db_relationship
 from app.core.database import Base
+
+
+class UserChurchUnit(Base):
+    """
+    A user's membership in a church unit, with a unit-specific role.
+    A user can belong to multiple units, each with a different role.
+    e.g. user is 'parish_admin' in St Francis but only 'viewer' in St Andrews.
+    """
+    __tablename__ = "user_church_units"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    church_unit_id = Column(Integer, ForeignKey("church_units.id", ondelete="CASCADE"), primary_key=True)
+    role_id = Column(Integer, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
+
+    user = db_relationship("User", back_populates="unit_memberships")
+    church_unit = db_relationship("ChurchUnit")
+    role = db_relationship("Role")
 
 
 class UserStatus(str, enum.Enum):
@@ -33,7 +50,6 @@ class User(Base):
         server_default=LoginMethod.PASSWORD.value,
     )
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True, index=True)
-    church_unit_id = Column(Integer, ForeignKey("church_units.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(
         Enum(UserStatus),
         nullable=False,
@@ -54,7 +70,7 @@ class User(Base):
     )
 
     role_ref = db_relationship("Role", back_populates="users")
-    church_unit = db_relationship("ChurchUnit", back_populates="users")
+    unit_memberships = db_relationship("UserChurchUnit", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User {self.email}>"

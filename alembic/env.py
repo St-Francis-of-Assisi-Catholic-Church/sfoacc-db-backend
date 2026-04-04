@@ -21,7 +21,7 @@ def get_url():
     server = os.getenv("POSTGRES_SERVER", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
     db = os.getenv("POSTGRES_DB", "postgres")
-    return f"postgresql://{user}:{password}@{server}:{port}/{db}"
+    return f"postgresql+psycopg://{user}:{password}@{server}:{port}/{db}"
 
 # Override sqlalchemy.url in alembic.ini
 config.set_main_option("sqlalchemy.url", get_url())

@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.routing import APIRoute
 
 from app.core.config import settings
@@ -108,6 +108,15 @@ if settings.all_cors_origins:
     )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+
+@app.get("/v/{verification_id}", include_in_schema=False)
+async def short_verify_redirect(verification_id: str):
+    """Short-link redirect used in SMS messages to save character count."""
+    return RedirectResponse(
+        url=f"{settings.BACKEND_HOST}{settings.API_V1_STR}/parishioners/verify/view/{verification_id}",
+        status_code=302
+    )
 
 
 @app.get("/", tags=["root"])

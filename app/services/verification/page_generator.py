@@ -137,8 +137,8 @@ class VerificationPageGenerator:
         station_name = None
         church_community_name = None
 
-        if hasattr(parishioner, 'station') and parishioner.station:
-            station_name = parishioner.station.name
+        if hasattr(parishioner, 'church_unit') and parishioner.church_unit:
+            station_name = parishioner.church_unit.name
 
         if hasattr(parishioner, 'church_community') and parishioner.church_community:
             church_community_name = parishioner.church_community.name

@@ -8,8 +8,10 @@ from app.api.v1.routes.parish import router as parish_module
 from app.api.v1.routes.admin import rbac as admin_rbac_module
 from app.api.v1.routes.admin import settings as admin_settings_module
 from app.api.v1.routes.admin import audit as admin_audit_module
+from app.api.v1.routes.admin import export as admin_export_module
 from app.api.v1.routes import guide as guide_module
 from app.api.v1.routes import app_info as app_info_module
+from app.api.v1.routes.events.router import router as events_router
 
 
 api_router = APIRouter()
@@ -32,5 +34,8 @@ api_router.include_router(parish_module.router, prefix="/parish", tags=["parish"
 api_router.include_router(admin_rbac_module.router, prefix="/admin", tags=["admin"])
 api_router.include_router(admin_settings_module.router, prefix="/admin/settings", tags=["admin"])
 api_router.include_router(admin_audit_module.router, prefix="/admin/audit-logs", tags=["admin"])
+api_router.include_router(admin_export_module.router, prefix="/admin/export", tags=["admin"])
+
+api_router.include_router(events_router, prefix="/events", tags=["events"])
 
 api_router.include_router(guide_module.router, tags=["docs"])

@@ -292,6 +292,11 @@ class FamilyInfoUpdate(BaseModel):
                 ]
             }
         }
+class SocietyMembershipCreate(BaseModel):
+    society_id: int
+    date_joined: Optional[date] = None
+
+
 # Parishioner Schemas
 class ParishionerBase(BaseModel):
     # Identity
@@ -334,6 +339,22 @@ class ParishionerCreate(ParishionerBase):
     pass
 
 
+class ParishionerFullCreate(ParishionerBase):
+    """Full registration payload — core fields + all optional sub-resources."""
+    church_unit_id: Optional[int] = None
+    church_community_id: Optional[int] = None
+
+    occupation: Optional[OccupationCreate] = None
+    family_info: Optional[FamilyInfoBatch] = None
+    emergency_contacts: Optional[List[EmergencyContactCreate]] = Field(None, max_length=3)
+    medical_conditions: Optional[List[MedicalConditionCreate]] = Field(None, max_length=5)
+    sacraments: Optional[List[ParSacramentCreate]] = None
+    # Skills: provide name only; backend will find-or-create
+    skills: Optional[List[str]] = None
+    language_ids: Optional[List[int]] = None
+    societies: Optional[List[SocietyMembershipCreate]] = None
+
+
 class ParishionerUpdate(ParishionerBase):
     pass
 
@@ -371,8 +392,20 @@ class ParishionerPartialUpdate(BaseModel):
 
 class ParishionerRead(ParishionerBase):
     id: UUID
+    church_unit_name: Optional[str] = None
+    church_community_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    @classmethod
+    def model_validate(cls, obj, *args, **kwargs):
+        instance = super().model_validate(obj, *args, **kwargs)
+        if hasattr(obj, "church_unit") and obj.church_unit:
+            instance.church_unit_name = obj.church_unit.name
+        if hasattr(obj, "church_community") and obj.church_community:
+            instance.church_community_name = obj.church_community.name
+        return instance
+
     class Config:
         from_attributes = True
 

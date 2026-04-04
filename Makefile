@@ -1,18 +1,8 @@
 # ─────────────────────────────────────────────────────────────
 #  SFOACC Backend Makefile
-#  Usage: make <target> [ENV=local|prod]
 # ─────────────────────────────────────────────────────────────
 
-ENV ?= prod
-
-# Compose flags: include local profile (db + adminer) when ENV=local
-ifeq ($(ENV),local)
-  COMPOSE = docker compose --profile local
-  export ENVIRONMENT=local
-else
-  COMPOSE = docker compose
-  export ENVIRONMENT=prod
-endif
+COMPOSE = docker compose
 
 # ── Colours ──────────────────────────────────────────────────
 RESET  := \033[0m
@@ -35,20 +25,20 @@ RED    := \033[0;31m
 # ── Default target ───────────────────────────────────────────
 help:
 	@echo ""
-	@echo "$(CYAN)SFOACC Backend$(RESET)  |  ENV=$(YELLOW)$(ENV)$(RESET)  (override: make <target> ENV=local)"
+	@echo "$(CYAN)SFOACC Backend$(RESET)"
 	@echo ""
 	@echo "$(GREEN)Local development (no Docker):$(RESET)"
 	@echo "  $(YELLOW)make dev$(RESET)                 Run uvicorn locally with hot-reload"
 	@echo ""
 	@echo "$(GREEN)Docker:$(RESET)"
-	@echo "  $(YELLOW)make build$(RESET)               Build images with layer cache (ENV=local includes db+adminer)"
+	@echo "  $(YELLOW)make build$(RESET)               Build images with layer cache"
 	@echo "  $(YELLOW)make build-clean$(RESET)         Build images from scratch (no cache)"
-	@echo "  $(YELLOW)make up$(RESET)                  Start services in detached mode"
+	@echo "  $(YELLOW)make up$(RESET)                  Start services (api, db, nginx, adminer)"
 	@echo "  $(YELLOW)make down$(RESET)                Stop and remove containers"
 	@echo "  $(YELLOW)make restart$(RESET)             down + up"
 	@echo "  $(YELLOW)make logs$(RESET)                Tail logs (all services)"
 	@echo "  $(YELLOW)make logs s=api$(RESET)          Tail logs for a specific service"
-	@echo "  (Health endpoint: http://localhost:8000/api/v1/health)"
+	@echo "  (API: http://localhost:8000  Docs: http://localhost:8000/api/v1/docs)"
 	@echo ""
 	@echo "$(GREEN)Setup:$(RESET)"
 	@echo "  $(YELLOW)make setup$(RESET)               Full first-time setup (ssl → build → up → init-db → seed → superuser)"
@@ -60,12 +50,12 @@ help:
 	@echo "  $(YELLOW)make migrate-history$(RESET)     Show migration history"
 	@echo "  $(YELLOW)make migrate-rollback$(RESET)    Rollback last migration"
 	@echo "  $(YELLOW)make init-db$(RESET)             Run app init_db script inside container"
-	@echo "  $(YELLOW)make seed$(RESET)                Seed reference data (sacraments, communities, etc.)"
+	@echo "  $(YELLOW)make seed$(RESET)                Seed reference data"
 	@echo "  $(YELLOW)make seed-rbac$(RESET)           Seed RBAC roles and permissions"
 	@echo "  $(YELLOW)make seed-parish$(RESET)         Seed default parish and stations"
 	@echo "  $(YELLOW)make check-db$(RESET)            Test database connection"
 	@echo "  $(YELLOW)make dump-db$(RESET)             Dump database to dumps/<timestamp>.sql"
-	@echo "  $(YELLOW)make load-dump dump=<file>$(RESET) Load a dump from dumps/<file> into the database"
+	@echo "  $(YELLOW)make load-dump dump=<file>$(RESET) Load a dump into the database"
 	@echo ""
 	@echo "$(GREEN)Admin:$(RESET)"
 	@echo "  $(YELLOW)make superuser$(RESET)           Create the first superuser"
@@ -76,7 +66,7 @@ help:
 	@echo "$(GREEN)Dev tools:$(RESET)"
 	@echo "  $(YELLOW)make shell$(RESET)               Open Python shell inside api container"
 	@echo "  $(YELLOW)make bash$(RESET)                Open bash shell inside api container"
-	@echo "  $(YELLOW)make lint$(RESET)                Run ruff linter (local)"
+	@echo "  $(YELLOW)make lint$(RESET)                Run ruff linter"
 	@echo "  $(YELLOW)make clean$(RESET)               Remove __pycache__ and .pyc files"
 	@echo ""
 
@@ -90,26 +80,24 @@ dev-stop:
 
 # ── Docker lifecycle ─────────────────────────────────────────
 build:
-	@echo "$(GREEN)Building images (ENV=$(ENV))...$(RESET)"
+	@echo "$(GREEN)Building images...$(RESET)"
 	$(COMPOSE) down --remove-orphans
 	$(COMPOSE) build
 
 build-clean:
-	@echo "$(GREEN)Building images from scratch (no cache, ENV=$(ENV))...$(RESET)"
+	@echo "$(GREEN)Building images from scratch (no cache)...$(RESET)"
 	$(COMPOSE) down --remove-orphans
 	$(COMPOSE) build --no-cache
 
 up:
-	@echo "$(GREEN)Starting services (ENV=$(ENV))...$(RESET)"
+	@echo "$(GREEN)Starting services...$(RESET)"
 	$(COMPOSE) up -d
 	@echo ""
 	@echo "$(CYAN)Services running:$(RESET)"
 	@echo "  API:     http://localhost:8000"
 	@echo "  Docs:    http://localhost:8000/api/v1/docs"
 	@echo "  Health:  http://localhost:8000/api/v1/health"
-ifeq ($(ENV),local)
-	@echo "  Adminer: http://localhost:8080"
-endif
+	@echo "  Adminer: http://localhost:8888"
 
 down:
 	@echo "$(RED)Stopping services...$(RESET)"
@@ -127,19 +115,19 @@ endif
 # ── First-time setup ─────────────────────────────────────────
 setup:
 	$(MAKE) ssl
-	$(MAKE) build ENV=$(ENV)
-	$(MAKE) up ENV=$(ENV)
-	$(MAKE) init-db ENV=$(ENV)
-	$(MAKE) seed ENV=$(ENV)
-	$(MAKE) seed-rbac ENV=$(ENV)
-	$(MAKE) seed-parish ENV=$(ENV)
-	$(MAKE) superuser ENV=$(ENV)
+	$(MAKE) build
+	$(MAKE) up
+	$(MAKE) init-db
+	$(MAKE) seed
+	$(MAKE) seed-rbac
+	$(MAKE) seed-parish
+	$(MAKE) superuser
 	@echo ""
 	@echo "$(GREEN)Setup complete!$(RESET)"
 
 ssl:
 	@echo "$(GREEN)Generating SSL certificates...$(RESET)"
-	@mkdir -p nginx/ssl nginx/logs nginx/conf.d
+	@mkdir -p nginx/ssl nginx/logs
 	@chmod +x scripts/generate_ssl.sh
 	@./scripts/generate_ssl.sh
 
@@ -178,7 +166,7 @@ seed:
 seed-rbac:
 	@echo "$(GREEN)Seeding RBAC roles and permissions...$(RESET)"
 	$(COMPOSE) exec api python3 -m app.scripts.seed_rbac
-	@echo "$(GREEN)RBAC seeding complete. Re-run anytime to add new permissions/roles.$(RESET)"
+	@echo "$(GREEN)RBAC seeding complete.$(RESET)"
 
 seed-parish:
 	@echo "$(GREEN)Seeding default parish and stations...$(RESET)"
@@ -221,23 +209,13 @@ dump-db:
 
 load-dump:
 ifndef dump
-	$(error Usage: make load-dump dump=<filename>   e.g. make load-dump dump=app_dump_20260310_075402.sql)
+	$(error Usage: make load-dump dump=<filename>)
 endif
 	@test -f dumps/$(dump) || (echo "$(RED)Error: dumps/$(dump) not found$(RESET)" && exit 1)
 	@echo "$(YELLOW)Loading dumps/$(dump) ...$(RESET)"
-ifeq ($(ENV),local)
 	$(COMPOSE) exec -T db sh -c \
 		'PGPASSWORD=$$POSTGRES_PASSWORD psql -h localhost -U $$POSTGRES_USER -d $$POSTGRES_DB' \
 		< dumps/$(dump)
-else
-	@set -a && . ./.env && set +a && \
-	PGPASSWORD=$$POSTGRES_PASSWORD psql \
-		-h $$POSTGRES_SERVER \
-		-p $$POSTGRES_PORT \
-		-U $$POSTGRES_USER \
-		-d $$POSTGRES_DB \
-		< dumps/$(dump)
-endif
 	@echo "$(GREEN)Dump loaded successfully.$(RESET)"
 
 # ── Shells ───────────────────────────────────────────────────
@@ -254,7 +232,7 @@ sdk:
 	$(COMPOSE) cp scripts/gen_sdk.py api:/app/scripts/gen_sdk.py
 	$(COMPOSE) exec api python3 /app/scripts/gen_sdk.py
 	$(COMPOSE) cp api:/app/sdk/types.ts sdk/types.ts
-	@echo "$(CYAN)Done. Review sdk/client.ts and sdk/hooks.ts if you added new endpoints.$(RESET)"
+	@echo "$(CYAN)Done.$(RESET)"
 
 # ── Linting / cleanup ────────────────────────────────────────
 lint:

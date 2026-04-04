@@ -40,8 +40,10 @@ def _can_manage_schedules(current_user, unit_id=None) -> bool:
     perms = {p.code for p in current_user.role_ref.permissions} if current_user.role_ref else set()
     if "admin:all" in perms or "admin:outstations" in perms or "admin:parish" in perms:
         return True
-    if unit_id and current_user.church_unit_id == unit_id and "admin:outstation" in perms:
-        return True
+    if unit_id and "admin:outstation" in perms:
+        member_unit_ids = {m.church_unit_id for m in current_user.unit_memberships}
+        if unit_id in member_unit_ids:
+            return True
     return False
 
 
@@ -52,8 +54,12 @@ def _can_manage_unit(current_user, unit_id: int) -> bool:
         or "admin:parish" in perms
         or "admin:outstations" in perms
     )
-    is_own_unit = current_user.church_unit_id == unit_id and "admin:outstation" in perms
-    return can_manage_all or is_own_unit
+    if can_manage_all:
+        return True
+    if "admin:outstation" in perms:
+        member_unit_ids = {m.church_unit_id for m in current_user.unit_memberships}
+        return unit_id in member_unit_ids
+    return False
 
 
 # ── Parish (primary unit) ───────────────────────────────────────
@@ -71,7 +77,7 @@ def _build_outstation_detail(session, unit: ChurchUnit) -> dict:
     }
 
 
-@router.get("", response_model=APIResponse)
+@router.get("", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def get_parish(session: SessionDep, current_user: CurrentUser) -> Any:
     """Return the primary parish with outstations (each with schedules, societies, communities)."""
     parish = (
@@ -121,7 +127,7 @@ async def update_parish(*, session: SessionDep, current_user: CurrentUser, data:
 
 # ── Parish mass schedules ───────────────────────────────────────
 
-@router.get("/mass-schedules", response_model=APIResponse)
+@router.get("/mass-schedules", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_parish_mass_schedules(session: SessionDep, current_user: CurrentUser) -> Any:
     """List mass schedules for the primary parish."""
     parish = (
@@ -214,7 +220,7 @@ async def delete_parish_mass_schedule(
 
 # ── Outstations (backward-compat) ──────────────────────────────
 
-@router.get("/outstations", response_model=APIResponse)
+@router.get("/outstations", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_outstations(
     session: SessionDep,
     current_user: CurrentUser,
@@ -264,7 +270,7 @@ async def create_outstation(
     return APIResponse(message="Outstation created", data=OutstationRead.model_validate(unit))
 
 
-@router.get("/outstations/{outstation_id}", response_model=APIResponse)
+@router.get("/outstations/{outstation_id}", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def get_outstation(outstation_id: int, session: SessionDep, current_user: CurrentUser) -> Any:
     unit = session.query(ChurchUnit).filter(
         ChurchUnit.id == outstation_id,
@@ -322,7 +328,7 @@ async def delete_outstation(
 
 # ── Outstation mass schedules ───────────────────────────────────
 
-@router.get("/outstations/{outstation_id}/mass-schedules", response_model=APIResponse)
+@router.get("/outstations/{outstation_id}/mass-schedules", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_outstation_mass_schedules(
     outstation_id: int, session: SessionDep, current_user: CurrentUser
 ) -> Any:
@@ -418,7 +424,7 @@ async def delete_outstation_mass_schedule(
 # ── General Church Units CRUD (all types) ──────────────────────
 # Available at /parish/units — full CRUD for all church unit types.
 
-@router.get("/units", response_model=APIResponse)
+@router.get("/units", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_church_units(
     session: SessionDep,
     current_user: CurrentUser,
@@ -463,7 +469,7 @@ async def create_church_unit(
     return APIResponse(message="Church unit created", data=ChurchUnitRead.model_validate(unit))
 
 
-@router.get("/units/{unit_id}", response_model=APIResponse)
+@router.get("/units/{unit_id}", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def get_church_unit(unit_id: int, session: SessionDep, current_user: CurrentUser) -> Any:
     unit = _get_unit_or_404(session, unit_id)
     if unit.type == ChurchUnitType.PARISH:
@@ -506,7 +512,7 @@ async def delete_church_unit(unit_id: int, *, session: SessionDep, current_user:
 
 # ── General mass schedules by unit ID ──────────────────────────
 
-@router.get("/units/{unit_id}/mass-schedules", response_model=APIResponse)
+@router.get("/units/{unit_id}/mass-schedules", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_unit_mass_schedules(
     unit_id: int, session: SessionDep, current_user: CurrentUser
 ) -> Any:
@@ -594,7 +600,7 @@ def _list_leadership(session, unit_id: int, current_only: bool) -> list:
     return q.order_by(ChurchUnitLeadership.role).all()
 
 
-@router.get("/units/{unit_id}/leadership", response_model=APIResponse)
+@router.get("/units/{unit_id}/leadership", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_unit_leadership(
     unit_id: int,
     session: SessionDep,
@@ -625,7 +631,7 @@ async def create_unit_leadership(
     return APIResponse(message="Leadership record created", data=LeadershipRead.model_validate(record))
 
 
-@router.get("/units/{unit_id}/leadership/{leadership_id}", response_model=APIResponse)
+@router.get("/units/{unit_id}/leadership/{leadership_id}", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def get_unit_leadership(
     unit_id: int, leadership_id: int, session: SessionDep, current_user: CurrentUser
 ) -> Any:
@@ -677,7 +683,7 @@ async def delete_unit_leadership(
 
 # ── Leadership convenience routes (primary parish & outstations) ─
 
-@router.get("/leadership", response_model=APIResponse)
+@router.get("/leadership", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_parish_leadership(
     session: SessionDep,
     current_user: CurrentUser,
@@ -752,7 +758,7 @@ async def delete_parish_leadership(
     return APIResponse(message="Leadership record deleted")
 
 
-@router.get("/outstations/{outstation_id}/leadership", response_model=APIResponse)
+@router.get("/outstations/{outstation_id}/leadership", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_outstation_leadership(
     outstation_id: int,
     session: SessionDep,
@@ -845,7 +851,7 @@ def _list_events(
     return q.order_by(ChurchEvent.event_date).all()
 
 
-@router.get("/units/{unit_id}/events", response_model=APIResponse)
+@router.get("/units/{unit_id}/events", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_unit_events(
     unit_id: int,
     session: SessionDep,
@@ -877,7 +883,7 @@ async def create_unit_event(
     return APIResponse(message="Event created", data=ChurchEventRead.model_validate(event))
 
 
-@router.get("/units/{unit_id}/events/{event_id}", response_model=APIResponse)
+@router.get("/units/{unit_id}/events/{event_id}", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def get_unit_event(
     unit_id: int, event_id: int, session: SessionDep, current_user: CurrentUser
 ) -> Any:
@@ -926,7 +932,7 @@ async def delete_unit_event(
 
 # ── Events convenience routes (primary parish & outstations) ────
 
-@router.get("/events", response_model=APIResponse)
+@router.get("/events", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_parish_events(
     session: SessionDep,
     current_user: CurrentUser,
@@ -1001,7 +1007,7 @@ async def delete_parish_event(
     return APIResponse(message="Event deleted")
 
 
-@router.get("/outstations/{outstation_id}/events", response_model=APIResponse)
+@router.get("/outstations/{outstation_id}/events", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
 async def list_outstation_events(
     outstation_id: int,
     session: SessionDep,

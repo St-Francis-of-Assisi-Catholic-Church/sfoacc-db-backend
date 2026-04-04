@@ -72,25 +72,11 @@ async def get_login_config(session: SessionDep) -> Any:
     """
     Everything the login page needs in one call:
       - login_methods: which methods are currently enabled
-      - groups: available groups with name/label/description
-      - church_units: active church units (id, name, type)
 
     Frontend logic:
       - Show password field only when login_methods.password == true
       - Show OTP option only when otp_email or otp_sms == true
-      - Populate group + church-unit dropdowns from this response
     """
-    from app.models.rbac import Role
-    from app.models.parish import ChurchUnit
-
-    groups = session.query(Role.name, Role.label, Role.description).order_by(Role.label).all()
-    units = (
-        session.query(ChurchUnit.id, ChurchUnit.name, ChurchUnit.type)
-        .filter(ChurchUnit.is_active == True)  # noqa: E712
-        .order_by(ChurchUnit.type, ChurchUnit.name)
-        .all()
-    )
-
     return {
         "data": {
             "login_methods": {
@@ -98,14 +84,6 @@ async def get_login_config(session: SessionDep) -> Any:
                 "otp_email": is_method_enabled(session, "otp_email"),
                 "otp_sms": is_method_enabled(session, "otp_sms"),
             },
-            "groups": [
-                {"name": r.name, "label": r.label, "description": r.description}
-                for r in groups
-            ],
-            "church_units": [
-                {"id": u.id, "name": u.name, "type": u.type.value}
-                for u in units
-            ],
         }
     }
 

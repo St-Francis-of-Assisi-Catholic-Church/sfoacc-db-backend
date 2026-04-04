@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.api.deps import SessionDep, CurrentUser, check_user_status
 
-from app.schemas.user import LoginResponse, PasswordResetRequest, PasswordResetResponse, User
+from app.schemas.user import LoginResponse, PasswordResetRequest, PasswordResetResponse, User, ChurchUnitSummary
 from app.models.user import User as UserModel, UserStatus, LoginMethod
 from app.services.otp_service import (
     generate_otp, verify_otp, send_otp_sms, send_otp_email,
@@ -47,6 +47,53 @@ def _issue_token(user: UserModel) -> str:
     )
 
 
+def _unit_summary(cu, role_ref=None, membership_role=None) -> ChurchUnitSummary:
+    role = membership_role.name if membership_role else (role_ref.name if role_ref else None)
+    role_label = membership_role.label if membership_role else (role_ref.label if role_ref else None)
+    return ChurchUnitSummary(
+        id=cu.id,
+        name=cu.name,
+        type=cu.type.value if hasattr(cu.type, "value") else str(cu.type),
+        role=role,
+        role_label=role_label,
+    )
+
+
+def _build_login_context(user: UserModel) -> dict:
+    """
+    Returns the routing hint, accessible units list, and default unit for the LoginResponse.
+
+    Routing rules:
+      super_admin    — role has admin:all permission → unrestricted, no unit selection needed
+      unit_dashboard — exactly one accessible unit → go straight to that unit's dashboard
+      unit_selection — two or more units → show a unit-picker screen
+      no_access      — authenticated but no unit assigned and not super admin
+    """
+    is_super = bool(
+        user.role_ref and any(p.code == "admin:all" for p in user.role_ref.permissions)
+    )
+
+    if is_super:
+        return {"routing": "super_admin", "accessible_units": [], "default_unit": None}
+
+    # Collect accessible units from multi-unit memberships
+    units: dict[int, ChurchUnitSummary] = {}
+    for membership in (user.unit_memberships or []):
+        cu = membership.church_unit
+        if cu is None:
+            continue
+        units[cu.id] = _unit_summary(cu, role_ref=user.role_ref, membership_role=membership.role)
+
+    unit_list = list(units.values())
+
+    if len(unit_list) == 0:
+        return {"routing": "no_access", "accessible_units": [], "default_unit": None}
+    elif len(unit_list) == 1:
+        return {"routing": "unit_dashboard", "accessible_units": unit_list, "default_unit": unit_list[0]}
+    else:
+        return {"routing": "unit_selection", "accessible_units": unit_list, "default_unit": None}
+
+
 def _lookup_user(session, identifier: str) -> UserModel | None:
     """Resolve email address or phone number to a User."""
     if "@" in identifier:
@@ -78,11 +125,13 @@ async def login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect credentials")
 
     check_user_status(user)
+    request.state.audit_user_id = str(user.id)
 
     return LoginResponse(
         access_token=_issue_token(user),
         token_type="bearer",
         user=User.model_validate(user),
+        **_build_login_context(user),
     )
 
 
@@ -181,12 +230,26 @@ async def verify_otp_login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired code")
 
     session.commit()
+    request.state.audit_user_id = str(user.id)
 
     return LoginResponse(
         access_token=_issue_token(user),
         token_type="bearer",
         user=User.model_validate(user),
+        **_build_login_context(user),
     )
+
+
+# ── Logout ────────────────────────────────────────────────────────────────────
+
+@router.post("/logout")
+async def logout(current_user: CurrentUser) -> Any:
+    """
+    Record a logout event. JWTs are stateless so the server cannot invalidate
+    the token — the client must discard it. This endpoint exists solely so that
+    the audit middleware can log the logout action against the authenticated user.
+    """
+    return {"message": "Logged out successfully"}
 
 
 # ── Current user ──────────────────────────────────────────────────────────────
@@ -222,10 +285,12 @@ async def reset_password(reset_data: PasswordResetRequest, session: SessionDep) 
     user.status = UserStatus.ACTIVE
     session.commit()
     session.refresh(user)
+    request.state.audit_user_id = str(user.id)
 
     return PasswordResetResponse(
         message="Password reset successful. You are now logged in.",
         access_token=_issue_token(user),
         token_type="bearer",
         user=User.model_validate(user),
+        **_build_login_context(user),
     )
