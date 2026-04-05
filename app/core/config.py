@@ -69,6 +69,16 @@ class Settings(BaseSettings):
                 f"https://{self.DOMAIN}",
                 f"http://{self.DOMAIN}:8000",
                 f"https://{self.DOMAIN}:8000",
+                # localhost for local development
+                "http://localhost",
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://localhost:8080",
+                "http://127.0.0.1",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5173",
+                "http://localhost:4200",
+                "http://127.0.0.1:4200",
             ]
         return self
 
