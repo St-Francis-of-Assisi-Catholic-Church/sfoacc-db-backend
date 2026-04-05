@@ -1,7 +1,5 @@
-import os
-from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
-from pydantic import AnyHttpUrl, AnyUrl, BeforeValidator, EmailStr, PostgresDsn, validator
+from typing import Annotated, Any, List, Literal, Optional, Union
+from pydantic import AnyUrl, BeforeValidator, EmailStr, PostgresDsn, model_validator
 from pydantic_core import MultiHostUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -13,11 +11,6 @@ def parse_cors(v: Any) -> Union[List[str], str]:
     raise ValueError(v)
 
 class Settings(BaseSettings):
-    # Get the absolute path to the root directory (2 levels up from config.py)
-    # ROOT_DIR = Path(__file__).resolve().parent.parent.parent
-    # ENV_FILE = ROOT_DIR / ".env"
-
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding='utf-8',
@@ -30,11 +23,17 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     VERSION: str = "1.0.0"
     PROJECT_NAME: str
+
+    # Single source of truth for the server address.
+    # Set to your IP (e.g. 194.146.13.3) or domain (e.g. api.sfoacc.org).
+    # BACKEND_HOST and BACKEND_CORS_ORIGINS are derived from this automatically.
     DOMAIN: str
-    BACKEND_HOST: str
+
+    BACKEND_HOST: Optional[str] = None
+    FRONTEND_HOST: str
 
     # SMS & Contact
-    ARKESEL_API_KEY: str 
+    ARKESEL_API_KEY: str
     SMS_SENDER_NAME: str
     CHURCH_NAME: str
     CHURCH_CONTACT: str
@@ -53,22 +52,31 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 40
     DB_POOL_TIMEOUT: int = 60
     DB_POOL_RECYCLE: int = 1800
-    
-    # CORS Configuration
-    # BACKEND_CORS_ORIGINS: List[str] = []
+
+    # CORS — derived from DOMAIN if not explicitly set
     BACKEND_CORS_ORIGINS: Annotated[
         Union[List[AnyUrl], str], BeforeValidator(parse_cors)
     ] = []
+
+    @model_validator(mode='after')
+    def derive_from_domain(self) -> 'Settings':
+        scheme = "https" if self.ENVIRONMENT == "production" and "." in self.DOMAIN else "http"
+        if not self.BACKEND_HOST:
+            self.BACKEND_HOST = f"{scheme}://{self.DOMAIN}:8000"
+        if not self.BACKEND_CORS_ORIGINS:
+            self.BACKEND_CORS_ORIGINS = [
+                f"http://{self.DOMAIN}",
+                f"https://{self.DOMAIN}",
+                f"http://{self.DOMAIN}:8000",
+                f"https://{self.DOMAIN}:8000",
+            ]
+        return self
 
     @property
     def all_cors_origins(self) -> List[str]:
         return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
             self.FRONTEND_HOST
         ]
- 
-
-    # Frontend
-    FRONTEND_HOST: str
 
     # Database
     POSTGRES_SERVER: str
