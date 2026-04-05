@@ -34,6 +34,9 @@ CLERGY_VALUES = [
 
 
 def upgrade() -> None:
+    # PostgreSQL does not allow using a newly added enum value in the same
+    # transaction it was added. Commit first so the next migration can use them.
+    op.execute("COMMIT")
     for value in CLERGY_VALUES:
         op.execute(f"ALTER TYPE leadershiprole ADD VALUE IF NOT EXISTS '{value}'")
 
