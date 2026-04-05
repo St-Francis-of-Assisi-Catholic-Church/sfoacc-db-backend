@@ -40,9 +40,9 @@ make setup             # ssl → build → up → init-db → seed → superuser
 
 | Service | URL |
 |---|---|
-| API | http://localhost:8000 |
-| Swagger docs | http://localhost:8000/api/v1/docs |
-| Health check | http://localhost:8000/api/v1/health |
+| API | https://localhost |
+| Swagger docs | https://localhost/api/v1/docs |
+| Health check | https://localhost/api/v1/health |
 | Adminer | http://localhost:8888 |
 
 ---

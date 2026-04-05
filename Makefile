@@ -94,9 +94,9 @@ up:
 	$(COMPOSE) up -d
 	@echo ""
 	@echo "$(CYAN)Services running:$(RESET)"
-	@echo "  API:     http://localhost:8000"
-	@echo "  Docs:    http://localhost:8000/api/v1/docs"
-	@echo "  Health:  http://localhost:8000/api/v1/health"
+	@echo "  API:     https://localhost"
+	@echo "  Docs:    https://localhost/api/v1/docs"
+	@echo "  Health:  https://localhost/api/v1/health"
 	@echo "  Adminer: http://localhost:8888"
 
 down:
