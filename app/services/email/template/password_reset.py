@@ -1,11 +1,12 @@
 from typing import Dict
 from .utils import BaseEmailTemplate, EmailTemplateContext
 from .utils import wrap_html_content, create_button
+from app.core.config import settings
 
 class PasswordResetTemplate(BaseEmailTemplate):
     @staticmethod
     def render(context: EmailTemplateContext) -> Dict[str, str]:
-        reset_url = f"https://your-domain.com/reset-password?token={context.reset_token}"
+        reset_url = f"{settings.FRONTEND_HOST}/reset-password?token={context.reset_token}"
         
         content = f"""
             <h1>Password Reset Request</h1>

@@ -52,6 +52,7 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./nginx/logs:/var/log/nginx
+      - /opt/sfoacc/frontend:/usr/share/nginx/html/frontend
     depends_on:
       - api
     networks:

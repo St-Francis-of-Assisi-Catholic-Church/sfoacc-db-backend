@@ -225,7 +225,7 @@ async def create_user(
                 message=(
                     f"Hi {user.full_name}, your {settings.CHURCH_NAME} admin account has been created. "
                     f"Temporary password: {temp_password}. "
-                    f"Please log in and change your password immediately."
+                    f"Login at {settings.FRONTEND_HOST} and change your password immediately."
                 ),
             )
             sms_sent = sms_result.get("success", False)

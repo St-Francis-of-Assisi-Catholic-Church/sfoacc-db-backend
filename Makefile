@@ -194,17 +194,12 @@ load-parishioners:
 # ── Dumps ────────────────────────────────────────────────────
 dump-db:
 	@mkdir -p dumps
-	@set -a && . ./.env && set +a && \
-	STAMP=$$(date +%Y%m%d_%H%M%S) && \
+	@STAMP=$$(date +%Y%m%d_%H%M%S) && \
 	FILE="dumps/dump_$${STAMP}.sql" && \
 	echo "$(GREEN)Dumping database to $${FILE}...$(RESET)" && \
-	PGPASSWORD=$$POSTGRES_PASSWORD pg_dump \
-		-h $$POSTGRES_SERVER \
-		-p $$POSTGRES_PORT \
-		-U $$POSTGRES_USER \
-		-d $$POSTGRES_DB \
-		--no-owner --no-acl \
-		-f "$${FILE}" && \
+	$(COMPOSE) exec -T db sh -c \
+		'pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB --no-owner --no-acl' \
+		> "$$FILE" && \
 	echo "$(GREEN)Dump saved to $${FILE}$(RESET)"
 
 load-dump:
@@ -212,9 +207,12 @@ ifndef dump
 	$(error Usage: make load-dump dump=<filename>)
 endif
 	@test -f dumps/$(dump) || (echo "$(RED)Error: dumps/$(dump) not found$(RESET)" && exit 1)
+	@echo "$(YELLOW)Wiping existing database...$(RESET)"
+	$(COMPOSE) exec -T db sh -c \
+		'psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
 	@echo "$(YELLOW)Loading dumps/$(dump) ...$(RESET)"
 	$(COMPOSE) exec -T db sh -c \
-		'PGPASSWORD=$$POSTGRES_PASSWORD psql -h localhost -U $$POSTGRES_USER -d $$POSTGRES_DB' \
+		'psql -U $$POSTGRES_USER -d $$POSTGRES_DB' \
 		< dumps/$(dump)
 	@echo "$(GREEN)Dump loaded successfully.$(RESET)"
 
