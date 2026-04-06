@@ -91,10 +91,18 @@ class User(BaseModel):
     def model_validate(cls, obj, *args, **kwargs):
         if hasattr(obj, "role_ref"):
             memberships = []
+            # Collect permissions from global role AND all unit-level roles
+            perm_set: set[str] = set()
+
+            if obj.role_ref:
+                perm_set.update(p.code for p in obj.role_ref.permissions)
+
             for m in (getattr(obj, "unit_memberships", None) or []):
                 cu = m.church_unit
                 if cu is None:
                     continue
+                if m.role:
+                    perm_set.update(p.code for p in m.role.permissions)
                 memberships.append(ChurchUnitSummary(
                     id=cu.id,
                     name=cu.name,
@@ -103,7 +111,14 @@ class User(BaseModel):
                     role_label=m.role.label if m.role else (obj.role_ref.label if obj.role_ref else None),
                 ))
 
-            permissions = [p.code for p in obj.role_ref.permissions] if obj.role_ref else []
+            # Determine the effective role to surface: global role takes precedence,
+            # fall back to the first unit-level role if no global role is set.
+            effective_role = obj.role_ref
+            if effective_role is None and memberships:
+                for m in (getattr(obj, "unit_memberships", None) or []):
+                    if m.role:
+                        effective_role = m.role
+                        break
 
             return cls(
                 id=obj.id,
@@ -111,9 +126,9 @@ class User(BaseModel):
                 full_name=obj.full_name,
                 phone=getattr(obj, "phone", None),
                 login_method=getattr(obj, "login_method", LoginMethod.PASSWORD),
-                role=obj.role_ref.name if obj.role_ref else None,
-                role_label=obj.role_ref.label if obj.role_ref else None,
-                permissions=permissions,
+                role=effective_role.name if effective_role else None,
+                role_label=effective_role.label if effective_role else None,
+                permissions=sorted(perm_set),
                 unit_memberships=memberships,
                 status=obj.status,
                 created_at=obj.created_at,

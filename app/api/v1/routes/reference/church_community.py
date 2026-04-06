@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission, has_permission
 from app.models.church_community import ChurchCommunity
+from app.models.parishioner.core import Parishioner
 from app.models.parish import ChurchUnit, ChurchUnitType
 from app.schemas.church_community import ChurchCommunityRead, ChurchCommunityCreate, ChurchCommunityUpdate
+from app.schemas.parishioner import ParishionerRead
 from app.schemas.common import APIResponse
 
 # Configure logging
@@ -116,6 +118,63 @@ async def create_church_community(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating church community: {str(e)}"
         )
+
+@router.get("/{community_id}/members", response_model=APIResponse)
+async def get_community_members(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    community_id: int,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    search: Optional[str] = None,
+) -> Any:
+    """Get all parishioners belonging to a church community."""
+    if not has_permission(current_user, "community:read"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+    community = session.query(ChurchCommunity).filter(ChurchCommunity.id == community_id).first()
+    if not community:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Church community with ID {community_id} not found"
+        )
+
+    try:
+        query = session.query(Parishioner).filter(Parishioner.church_community_id == community_id)
+
+        if search:
+            term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Parishioner.first_name.ilike(term),
+                    Parishioner.last_name.ilike(term),
+                    Parishioner.other_names.ilike(term),
+                    Parishioner.new_church_id.ilike(term),
+                )
+            )
+
+        total = query.count()
+        parishioners = query.offset(skip).limit(limit).all()
+
+        return APIResponse(
+            message=f"Retrieved {len(parishioners)} members of '{community.name}'",
+            data={
+                "total": total,
+                "items": [ParishionerRead.model_validate(p) for p in parishioners],
+                "skip": skip,
+                "limit": limit,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving community members: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving community members: {str(e)}"
+        )
+
 
 @router.get("/{community_id}", response_model=APIResponse)
 async def get_church_community_by_id(

@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope
 
 from app.models.sacrament import Sacrament
+from app.models.parishioner.core import Parishioner, ParishionerSacrament
 from app.schemas.common import APIResponse
 from app.schemas.sacrament import SacramentRead
 
@@ -164,3 +165,51 @@ async def get_sacrament_by_id(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving sacrament: {str(e)}"
         )
+
+
+@router.get("/{sacrament_id}/recipients", response_model=APIResponse)
+async def get_sacrament_recipients(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
+    sacrament_id: int,
+) -> Any:
+    """
+    Get all parishioners who have received a specific sacrament.
+    Scoped to the user's church unit when applicable.
+    """
+    sacrament = session.query(Sacrament).filter(Sacrament.id == sacrament_id).first()
+    if not sacrament:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Sacrament with ID {sacrament_id} not found",
+        )
+
+    q = (
+        session.query(ParishionerSacrament)
+        .join(Parishioner, Parishioner.id == ParishionerSacrament.parishioner_id)
+        .filter(ParishionerSacrament.sacrament_id == sacrament_id)
+    )
+    if unit_scope is not None:
+        q = q.filter(Parishioner.church_unit_id == unit_scope)
+
+    records = q.order_by(ParishionerSacrament.date_received.desc().nullslast()).all()
+
+    data = [
+        {
+            "record_id": r.id,
+            "parishioner_id": str(r.parishioner_id),
+            "parishioner_name": f"{r.parishioner.first_name} {r.parishioner.last_name}",
+            "date_received": r.date_received.isoformat() if r.date_received else None,
+            "place": r.place,
+            "minister": r.minister,
+            "notes": r.notes,
+        }
+        for r in records
+    ]
+
+    return APIResponse(
+        message=f"Retrieved {len(data)} recipients for {sacrament.name}",
+        data=data,
+    )

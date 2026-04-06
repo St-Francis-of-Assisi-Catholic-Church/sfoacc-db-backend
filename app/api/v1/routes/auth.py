@@ -59,20 +59,30 @@ def _unit_summary(cu, role_ref=None, membership_role=None) -> ChurchUnitSummary:
     )
 
 
+_ADMIN_PORTAL_PERMISSIONS = {"admin:all", "admin:parish", "admin:outstation", "admin:settings", "reporting:read"}
+
+
 def _build_login_context(user: UserModel) -> dict:
     """
     Returns the routing hint, accessible units list, and default unit for the LoginResponse.
 
     Routing rules:
-      super_admin    — role has admin:all permission → unrestricted, no unit selection needed
-      unit_dashboard — exactly one accessible unit → go straight to that unit's dashboard
-      unit_selection — two or more units → show a unit-picker screen
-      no_access      — authenticated but no unit assigned and not super admin
+      super_admin    — role has admin:all → unrestricted admin portal, no unit selection
+      admin_portal   — role has any admin-level permission (parish/outstation admin) →
+                       scoped admin portal; unit selection if multiple units
+      unit_dashboard — exactly one accessible unit, no admin perms → regular portal
+      unit_selection — two or more units, no admin perms → unit-picker screen
+      no_access      — authenticated but no unit and not super admin
     """
-    is_super = bool(
-        user.role_ref and any(p.code == "admin:all" for p in user.role_ref.permissions)
-    )
+    # Collect all effective permissions: global role + all unit-level roles
+    all_perms: set[str] = set()
+    if user.role_ref:
+        all_perms.update(p.code for p in user.role_ref.permissions)
+    for membership in (user.unit_memberships or []):
+        if membership.role:
+            all_perms.update(p.code for p in membership.role.permissions)
 
+    is_super = "admin:all" in all_perms
     if is_super:
         return {"routing": "super_admin", "accessible_units": [], "default_unit": None}
 
@@ -88,7 +98,15 @@ def _build_login_context(user: UserModel) -> dict:
 
     if len(unit_list) == 0:
         return {"routing": "no_access", "accessible_units": [], "default_unit": None}
-    elif len(unit_list) == 1:
+
+    # Any admin-level permission → route to admin portal
+    is_admin = bool(all_perms & _ADMIN_PORTAL_PERMISSIONS)
+    if is_admin:
+        default = unit_list[0] if len(unit_list) == 1 else None
+        routing = "admin_portal" if len(unit_list) == 1 else "admin_unit_selection"
+        return {"routing": routing, "accessible_units": unit_list, "default_unit": default}
+
+    if len(unit_list) == 1:
         return {"routing": "unit_dashboard", "accessible_units": unit_list, "default_unit": unit_list[0]}
     else:
         return {"routing": "unit_selection", "accessible_units": unit_list, "default_unit": None}

@@ -3,21 +3,22 @@ from typing import Any, Optional
 from fastapi import APIRouter, Query
 from sqlalchemy import desc
 
-from app.api.deps import SessionDep, CurrentUser, require_permission
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission, is_super_admin
 from app.models.audit import AuditLog
-from app.models.user import User as UserModel
+from app.models.user import User as UserModel, UserChurchUnit
 from app.schemas.common import APIResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_REQUIRE = require_permission("admin:all")
+_REQUIRE = require_permission("reporting:read")
 
 
 @router.get("", response_model=APIResponse, dependencies=[_REQUIRE])
 async def list_audit_logs(
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
     method: Optional[str] = Query(None, description="Filter by HTTP method"),
     search: Optional[str] = Query(None, description="Search in path or summary"),
@@ -25,10 +26,23 @@ async def list_audit_logs(
     limit: int = Query(50, ge=1, le=500),
 ) -> Any:
     """
-    Audit log — all state-changing actions across the system.
-    Super admin only.
+    Audit log — all state-changing actions.
+    Super admins see the full log. Church administrators see only actions
+    performed by users who belong to their unit.
     """
     q = session.query(AuditLog).order_by(desc(AuditLog.created_at))
+
+    # Unit scoping: restrict to actions by users in this unit
+    if unit_scope is not None:
+        unit_user_ids = [
+            str(m.user_id)
+            for m in session.query(UserChurchUnit.user_id)
+            .filter(UserChurchUnit.church_unit_id == unit_scope)
+            .all()
+        ]
+        # Always include the current user's own actions
+        unit_user_ids_set = set(unit_user_ids) | {str(current_user.id)}
+        q = q.filter(AuditLog.user_id.in_(unit_user_ids_set))
 
     if user_id:
         q = q.filter(AuditLog.user_id == user_id)

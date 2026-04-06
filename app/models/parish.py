@@ -78,6 +78,7 @@ class MassSchedule(Base):
     day_of_week = Column(Enum(DayOfWeek), nullable=False)
     time = Column(Time, nullable=False)
     mass_type = Column(Enum(MassType), nullable=False, default=MassType.SUNDAY)
+    label = Column(String(100), nullable=True)  # e.g. "First Mass", "Second Mass", "Third Mass"
     language = Column(String(100), nullable=False, default="English")
     description = Column(String(500), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)

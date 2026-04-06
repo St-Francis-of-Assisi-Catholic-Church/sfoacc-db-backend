@@ -55,6 +55,12 @@ class User(Base):
         nullable=False,
         default=UserStatus.RESET_REQUIRED.value,
     )
+    # Set to now() when role/permissions change — any token issued before this timestamp is rejected
+    tokens_invalidated_before = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

@@ -28,15 +28,40 @@ make setup             # ssl → build → up → init-db → seed → superuser
 
 ### Day-to-day
 
+There are two modes depending on what you need:
+
+**Backend only** (recommended for local dev — no nginx, no SSL certs required):
+```bash
+make up backend=1
+```
+
+**All services** (api + db + nginx + adminer — requires SSL certs for all domains):
+```bash
+make up
+```
+
 | Goal | Command |
 |---|---|
-| Start services | `make up` |
+| Start backend only (local dev) | `make up backend=1` |
+| Start all services (production-like) | `make up` |
 | Stop services | `make down` |
-| Restart | `make restart` |
+| Restart backend only | `make restart backend=1` |
+| Restart all | `make restart` |
 | View logs | `make logs` or `make logs s=api` |
 | Run without Docker (hot-reload) | `make dev` |
 
 ### Service URLs
+
+**Backend only mode (`make up backend=1`):**
+
+| Service | URL |
+|---|---|
+| API | http://localhost:8000 |
+| Swagger docs | http://localhost:8000/api/v1/docs |
+| Health check | http://localhost:8000/api/v1/health |
+| Adminer | http://localhost:8888 |
+
+**All services mode (`make up`):**
 
 | Service | URL |
 |---|---|
@@ -255,9 +280,11 @@ make help
 |---|---|
 | `make build` | Build images (with layer cache) |
 | `make build-clean` | Build from scratch (no cache) |
-| `make up` | Start api, db, nginx, adminer |
+| `make up` | Start all services: api, db, nginx, adminer |
+| `make up backend=1` | Start backend only: api, db, adminer (no nginx) |
 | `make down` | Stop and remove containers |
 | `make restart` | down + up |
+| `make restart backend=1` | Restart backend only |
 | `make logs [s=<service>]` | Tail logs |
 
 ### Database

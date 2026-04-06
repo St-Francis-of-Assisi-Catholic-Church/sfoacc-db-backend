@@ -35,9 +35,10 @@ _STATS_TTL = 300  # 5 minutes
 async def get_parishioner_stats(
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
 ) -> Any:
-    """Get general statistics about parishioners."""
-    cache_key = "parishioner_stats"
+    """Get general statistics about parishioners, scoped to the requesting user's church unit."""
+    cache_key = f"parishioner_stats_{unit_scope}"
     now = time.time()
     if cache_key in _stats_cache:
         ts, cached = _stats_cache[cache_key]
@@ -45,31 +46,50 @@ async def get_parishioner_stats(
             return cached
 
     try:
-        total_parishioners = session.query(func.count(ParishionerModel.id)).scalar()
+        base_q = session.query(ParishionerModel)
+        if unit_scope is not None:
+            base_q = base_q.filter(ParishionerModel.church_unit_id == unit_scope)
 
-        # Use scalar subqueries to avoid cross-join bug
-        total_outstations_sq = sa_select(func.count(ChurchUnit.id)).where(
-            ChurchUnit.type == ChurchUnitType.OUTSTATION
-        ).scalar_subquery()
-        total_societies, total_stations, total_communities = session.query(
-            sa_select(func.count(Society.id)).scalar_subquery(),
-            total_outstations_sq,
-            sa_select(func.count(ChurchCommunity.id)).scalar_subquery(),
-        ).one()
+        total_parishioners = base_q.with_entities(func.count(ParishionerModel.id)).scalar()
+
+        _unit_filter = (Society.church_unit_id == unit_scope) if unit_scope is not None else True
+        _comm_unit_filter = (ChurchCommunity.church_unit_id == unit_scope) if unit_scope is not None else True
+
+        total_societies = session.query(func.count(Society.id)).filter(_unit_filter).scalar()
+
+        # Outstations count: children of the scoped unit, or all outstations if no scope
+        if unit_scope is not None:
+            total_stations = (
+                session.query(func.count(ChurchUnit.id))
+                .filter(ChurchUnit.type == ChurchUnitType.OUTSTATION, ChurchUnit.parent_id == unit_scope)
+                .scalar()
+            )
+        else:
+            total_stations = (
+                session.query(func.count(ChurchUnit.id))
+                .filter(ChurchUnit.type == ChurchUnitType.OUTSTATION)
+                .scalar()
+            )
+
+        total_communities = session.query(func.count(ChurchCommunity.id)).filter(_comm_unit_filter).scalar()
 
         society_stats = (
             session.query(Society.name, func.count(society_members.c.parishioner_id))
             .join(society_members, Society.id == society_members.c.society_id)
+            .filter(_unit_filter)
             .group_by(Society.id, Society.name)
             .all()
         )
 
         parishioners_in_societies_count = (
-            session.query(func.count(distinct(society_members.c.parishioner_id))).scalar()
+            session.query(func.count(distinct(society_members.c.parishioner_id)))
+            .join(Society, Society.id == society_members.c.society_id)
+            .filter(_unit_filter)
+            .scalar()
         )
 
         day_of_week_stats = (
-            session.query(
+            base_q.with_entities(
                 func.extract('dow', ParishionerModel.date_of_birth),
                 func.count(ParishionerModel.id),
             )
@@ -86,18 +106,20 @@ async def get_parishioner_stats(
             if day is not None:
                 day_of_week_distribution[days_of_week[int(day)]] = count
 
-        # Single LEFT JOIN covers both "all sacraments" and counts
+        _sac_unit_filter = (ParishionerModel.church_unit_id == unit_scope) if unit_scope is not None else True
         sacrament_distribution = {}
         for sacrament_name, count in (
             session.query(Sacrament.name, func.count(distinct(ParishionerSacrament.parishioner_id)))
             .outerjoin(ParishionerSacrament, Sacrament.id == ParishionerSacrament.sacrament_id)
+            .outerjoin(ParishionerModel, ParishionerModel.id == ParishionerSacrament.parishioner_id)
+            .filter(_sac_unit_filter)
             .group_by(Sacrament.name)
             .all()
         ):
             sacrament_distribution[sacrament_name] = count or 0
 
         gender_stats = (
-            session.query(ParishionerModel.gender, func.count(ParishionerModel.id))
+            base_q.with_entities(ParishionerModel.gender, func.count(ParishionerModel.id))
             .group_by(ParishionerModel.gender)
             .all()
         )
@@ -105,7 +127,7 @@ async def get_parishioner_stats(
 
         marital_status_distribution = {s.value: 0 for s in MaritalStatus}
         marital_status_stats = (
-            session.query(ParishionerModel.marital_status, func.count(ParishionerModel.id))
+            base_q.with_entities(ParishionerModel.marital_status, func.count(ParishionerModel.id))
             .group_by(ParishionerModel.marital_status)
             .all()
         )
@@ -115,10 +137,12 @@ async def get_parishioner_stats(
 
         current_year = datetime.now(timezone.utc).year
         age_groups = {"0-17": 0, "18-25": 0, "26-40": 0, "41-60": 0, "61+": 0, "Unknown": 0}
-        for year_born, count in session.query(
-            func.extract('year', ParishionerModel.date_of_birth),
-            func.count(ParishionerModel.id),
-        ).group_by(func.extract('year', ParishionerModel.date_of_birth)).all():
+        for year_born, count in (
+            base_q.with_entities(
+                func.extract('year', ParishionerModel.date_of_birth),
+                func.count(ParishionerModel.id),
+            ).group_by(func.extract('year', ParishionerModel.date_of_birth)).all()
+        ):
             if year_born is None:
                 age_groups["Unknown"] += count
             else:
@@ -134,34 +158,36 @@ async def get_parishioner_stats(
                 else:
                     age_groups["61+"] += count
 
-        # Church unit distribution — single LEFT JOIN
+        # Outstation distribution: parishioners per child outstation of the scoped unit
         outstation_distribution: dict = {}
-        for unit_name, count in (
+        outstation_q = (
             session.query(ChurchUnit.name, func.count(ParishionerModel.id))
             .outerjoin(ParishionerModel, ChurchUnit.id == ParishionerModel.church_unit_id)
             .filter(ChurchUnit.type == ChurchUnitType.OUTSTATION)
-            .group_by(ChurchUnit.name)
-            .all()
-        ):
+        )
+        if unit_scope is not None:
+            outstation_q = outstation_q.filter(ChurchUnit.parent_id == unit_scope)
+        for unit_name, count in outstation_q.group_by(ChurchUnit.name).all():
             outstation_distribution[unit_name] = count or 0
         outstation_distribution["Not specified"] = (
-            session.query(func.count(ParishionerModel.id))
-            .filter(ParishionerModel.church_unit_id.is_(None))
+            base_q.filter(ParishionerModel.church_unit_id.is_(None))
+            .with_entities(func.count(ParishionerModel.id))
             .scalar()
         )
 
-        # Church community distribution — single LEFT JOIN replaces 3 queries
+        # Church community distribution scoped to the unit
         church_community_distribution: dict = {}
         for community_name, count in (
             session.query(ChurchCommunity.name, func.count(ParishionerModel.id))
             .outerjoin(ParishionerModel, ChurchCommunity.id == ParishionerModel.church_community_id)
+            .filter(_comm_unit_filter)
             .group_by(ChurchCommunity.name)
             .all()
         ):
             church_community_distribution[community_name] = count or 0
         church_community_distribution["Not specified"] = (
-            session.query(func.count(ParishionerModel.id))
-            .filter(ParishionerModel.church_community_id.is_(None))
+            base_q.filter(ParishionerModel.church_community_id.is_(None))
+            .with_entities(func.count(ParishionerModel.id))
             .scalar()
         )
 
@@ -199,11 +225,15 @@ async def get_parishioner_stats(
 async def get_registration_stats(
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
 ) -> Any:
-    """Get statistics about parishioner registration and verification status."""
+    """Get statistics about parishioner registration and verification status, scoped to the user's church unit."""
     try:
-        # Single query replaces five separate scalar queries
-        total, verified, pending, with_id = session.query(
+        base_q = session.query(ParishionerModel)
+        if unit_scope is not None:
+            base_q = base_q.filter(ParishionerModel.church_unit_id == unit_scope)
+
+        total, verified, pending, with_id = base_q.with_entities(
             func.count(ParishionerModel.id),
             func.count(case((ParishionerModel.verification_status == VerificationStatus.VERIFIED, 1))),
             func.count(case((ParishionerModel.verification_status == VerificationStatus.PENDING, 1))),

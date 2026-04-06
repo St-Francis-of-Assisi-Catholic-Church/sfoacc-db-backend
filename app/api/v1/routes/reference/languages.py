@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, HTTPException, Path, Query, status
 from sqlalchemy import func
 
-from app.api.deps import CurrentUser, SessionDep, is_admin
+from app.api.deps import CurrentUser, SessionDep, has_permission
 from app.models.language import Language
 from app.schemas.common import APIResponse
 from app.schemas.language import LanguageCreate, LanguageRead, LanguageUpdate
@@ -28,7 +28,7 @@ async def get_all_languages(
     """
     Get all available languages with optional search and pagination.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -77,7 +77,7 @@ async def create_language(
     """
     Create a new language.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "admin:parish"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -135,7 +135,7 @@ async def get_language(
     """
     Get a specific language by ID.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -175,7 +175,7 @@ async def update_language(
     """
     Update a language.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "admin:parish"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -241,7 +241,7 @@ async def delete_language(
     """
     Delete a language.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "admin:parish"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Path, Query
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser, is_admin
+from app.api.deps import SessionDep, CurrentUser, has_permission
 from app.models.parishioner import Parishioner, Skill
 from app.schemas.common import APIResponse
 from app.schemas.parishioner import  SkillCreate, SkillRead, SkillBase
@@ -62,7 +62,7 @@ async def add_parishioner_skill(
     If it doesn't exist, it will be created and then linked.
     """
     # Check permissions
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -120,7 +120,7 @@ async def add_multiple_skills(
     Replace all existing skills of a parishioner with the new batch of skills.
     """
     # Check permissions
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -187,7 +187,7 @@ async def remove_parishioner_skill(
     it only removes the association between the parishioner and the skill.
     """
     # Check permissions
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -246,7 +246,7 @@ async def get_all_available_skills(
     Useful for populating dropdown menus.
     """
     # Check permissions
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

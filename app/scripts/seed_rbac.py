@@ -89,14 +89,14 @@ DEFAULT_ROLES = [
             "community:read", "community:write", "community:delete", "community:membership",
             # Church units — read only
             "church_unit:read",
-            # App users — read + write (no delete)
-            "user:read", "user:write",
+            # App users — full
+            "user:read", "user:write", "user:delete",
             # Messaging — full
             "messaging:read", "messaging:send",
             # Statistics & reporting
             "statistics:read", "reporting:read",
-            # Unit admin
-            "admin:outstation", "admin:settings",
+            # Unit admin (no admin:settings — church admin cannot change app settings)
+            "admin:outstation",
         ],
     },
 
@@ -156,8 +156,8 @@ DEFAULT_ROLES = [
             "church_unit:read",
             # Messaging — send only
             "messaging:send",
-            # Statistics — view only
-            "statistics:read",
+            # Statistics & reporting — view + exports + audit logs
+            "statistics:read", "reporting:read",
         ],
     },
 

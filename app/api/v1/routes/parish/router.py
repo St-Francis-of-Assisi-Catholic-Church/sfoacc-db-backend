@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import SessionDep, CurrentUser, require_permission, is_super_admin
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission, is_super_admin
 from app.models.parish import ChurchUnit, ChurchUnitType, MassSchedule
 from app.models.church_unit_admin import ChurchUnitLeadership, ChurchEvent
 from app.models.society import Society
@@ -127,7 +127,7 @@ async def update_parish(*, session: SessionDep, current_user: CurrentUser, data:
 
 # ── Parish mass schedules ───────────────────────────────────────
 
-@router.get("/mass-schedules", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
+@router.get("/mass-schedules", response_model=APIResponse)
 async def list_parish_mass_schedules(session: SessionDep, current_user: CurrentUser) -> Any:
     """List mass schedules for the primary parish."""
     parish = (
@@ -224,11 +224,15 @@ async def delete_parish_mass_schedule(
 async def list_outstations(
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ) -> Any:
-    """List all OUTSTATION-type church units."""
+    """List OUTSTATION-type church units. Unit-scoped users only see outstations they are explicitly assigned to."""
     query = session.query(ChurchUnit).filter(ChurchUnit.type == ChurchUnitType.OUTSTATION)
+    if unit_scope is not None:
+        accessible_ids = {m.church_unit_id for m in current_user.unit_memberships}
+        query = query.filter(ChurchUnit.id.in_(accessible_ids))
     total = query.count()
     outstations = query.offset(skip).limit(limit).all()
     return APIResponse(
@@ -328,7 +332,7 @@ async def delete_outstation(
 
 # ── Outstation mass schedules ───────────────────────────────────
 
-@router.get("/outstations/{outstation_id}/mass-schedules", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
+@router.get("/outstations/{outstation_id}/mass-schedules", response_model=APIResponse)
 async def list_outstation_mass_schedules(
     outstation_id: int, session: SessionDep, current_user: CurrentUser
 ) -> Any:
@@ -428,11 +432,15 @@ async def delete_outstation_mass_schedule(
 async def list_church_units(
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ) -> Any:
-    """List all church units (parishes and outstations)."""
+    """List church units. Unit-scoped users only see units they are explicitly assigned to."""
     query = session.query(ChurchUnit)
+    if unit_scope is not None:
+        accessible_ids = {m.church_unit_id for m in current_user.unit_memberships}
+        query = query.filter(ChurchUnit.id.in_(accessible_ids))
     total = query.count()
     units = query.offset(skip).limit(limit).all()
     return APIResponse(
@@ -512,7 +520,7 @@ async def delete_church_unit(unit_id: int, *, session: SessionDep, current_user:
 
 # ── General mass schedules by unit ID ──────────────────────────
 
-@router.get("/units/{unit_id}/mass-schedules", response_model=APIResponse, dependencies=[require_permission("church_unit:read")])
+@router.get("/units/{unit_id}/mass-schedules", response_model=APIResponse)
 async def list_unit_mass_schedules(
     unit_id: int, session: SessionDep, current_user: CurrentUser
 ) -> Any:

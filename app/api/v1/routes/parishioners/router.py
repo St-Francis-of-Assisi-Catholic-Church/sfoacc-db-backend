@@ -589,7 +589,7 @@ async def get_detailed_parishioner(
         joinedload(ParishionerModel.family_info_rel).joinedload(FamilyInfo.children_rel),
         joinedload(ParishionerModel.emergency_contacts_rel),
         joinedload(ParishionerModel.medical_conditions_rel),
-        joinedload(ParishionerModel.sacrament_records),
+        joinedload(ParishionerModel.sacrament_records).joinedload(ParishionerSacrament.sacrament),
         joinedload(ParishionerModel.skills_rel),
         joinedload(ParishionerModel.societies),
     ).filter(ParishionerModel.id == parishioner_id).first()

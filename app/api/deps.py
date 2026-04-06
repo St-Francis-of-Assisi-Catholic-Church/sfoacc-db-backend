@@ -2,6 +2,8 @@ from collections.abc import Generator
 from typing import Annotated
 from uuid import UUID
 
+from datetime import datetime, timezone
+
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError, api_jwt
@@ -16,6 +18,7 @@ from app.models.user import User as UserModel, UserStatus, UserChurchUnit
 
 class TokenPayload(BaseModel):
     sub: str | None = None
+    iat: int | None = None
 
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -98,6 +101,17 @@ def get_current_user(
 
     user = session.query(UserModel).filter(UserModel.id == user_id).first()
     check_user_status(user)
+
+    # Check if this token was issued before the user's last role/permission change
+    if user.tokens_invalidated_before is not None and token_data.iat is not None:
+        token_issued_at = datetime.fromtimestamp(token_data.iat, tz=timezone.utc)
+        if token_issued_at < user.tokens_invalidated_before:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Your session is no longer valid. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     return user
 
 
@@ -189,6 +203,14 @@ def is_admin(user: "UserModel") -> bool:
     if user.role_ref is None:
         return False
     return any(p.code == "admin:all" for p in user.role_ref.permissions)
+
+
+def has_permission(user: "UserModel", permission_code: str) -> bool:
+    """Check if user has a specific permission (or admin:all)."""
+    if user.role_ref is None:
+        return False
+    perms = {p.code for p in user.role_ref.permissions}
+    return "admin:all" in perms or permission_code in perms
 
 
 def get_church_unit_scope(

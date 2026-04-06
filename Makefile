@@ -2,7 +2,8 @@
 #  SFOACC Backend Makefile
 # ─────────────────────────────────────────────────────────────
 
-COMPOSE = docker compose
+COMPOSE      = docker compose
+COMPOSE_LOCAL = docker compose -f docker-compose.local.yml
 
 # ── Colours ──────────────────────────────────────────────────
 RESET  := \033[0m
@@ -25,49 +26,114 @@ RED    := \033[0;31m
 # ── Default target ───────────────────────────────────────────
 help:
 	@echo ""
-	@echo "$(CYAN)SFOACC Backend$(RESET)"
+	@echo "$(CYAN)╔══════════════════════════════════════════════════╗$(RESET)"
+	@echo "$(CYAN)║           SFOACC Backend — Make Commands         ║$(RESET)"
+	@echo "$(CYAN)╚══════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
-	@echo "$(GREEN)Local development (no Docker):$(RESET)"
-	@echo "  $(YELLOW)make dev$(RESET)                 Run uvicorn locally with hot-reload"
+	@echo "$(GREEN)── Local Dev (no Docker) ──────────────────────────$(RESET)"
+	@echo "  $(YELLOW)make dev$(RESET)"
+	@echo "      Start uvicorn with hot-reload on http://localhost:8000"
+	@echo "      Use this for local development without Docker."
 	@echo ""
-	@echo "$(GREEN)Docker:$(RESET)"
-	@echo "  $(YELLOW)make build$(RESET)               Build images with layer cache"
-	@echo "  $(YELLOW)make build-clean$(RESET)         Build images from scratch (no cache)"
-	@echo "  $(YELLOW)make up$(RESET)                  Start services (api, db, nginx, adminer)"
-	@echo "  $(YELLOW)make down$(RESET)                Stop and remove containers"
-	@echo "  $(YELLOW)make restart$(RESET)             down + up"
-	@echo "  $(YELLOW)make logs$(RESET)                Tail logs (all services)"
-	@echo "  $(YELLOW)make logs s=api$(RESET)          Tail logs for a specific service"
-	@echo "  (API: http://localhost:8000  Docs: http://localhost:8000/api/v1/docs)"
+	@echo "$(GREEN)── Docker ─────────────────────────────────────────$(RESET)"
+	@echo "  $(YELLOW)make build$(RESET)"
+	@echo "      Build Docker images (uses layer cache — fast)."
 	@echo ""
-	@echo "$(GREEN)Setup:$(RESET)"
-	@echo "  $(YELLOW)make setup$(RESET)               Full first-time setup (ssl → build → up → init-db → seed → superuser)"
-	@echo "  $(YELLOW)make ssl$(RESET)                 Generate/refresh self-signed SSL certificates"
+	@echo "  $(YELLOW)make build-clean$(RESET)"
+	@echo "      Rebuild images from scratch, ignoring cache."
+	@echo "      Use when dependencies or Dockerfile change."
 	@echo ""
-	@echo "$(GREEN)Database:$(RESET)"
-	@echo "  $(YELLOW)make migrate$(RESET)             Apply all pending Alembic migrations"
-	@echo "  $(YELLOW)make migrate-auto m=\"msg\"$(RESET) Auto-generate a new migration"
-	@echo "  $(YELLOW)make migrate-history$(RESET)     Show migration history"
-	@echo "  $(YELLOW)make migrate-rollback$(RESET)    Rollback last migration"
-	@echo "  $(YELLOW)make init-db$(RESET)             Run app init_db script inside container"
-	@echo "  $(YELLOW)make seed$(RESET)                Seed reference data"
-	@echo "  $(YELLOW)make seed-rbac$(RESET)           Seed RBAC roles and permissions"
-	@echo "  $(YELLOW)make seed-parish$(RESET)         Seed default parish and stations"
-	@echo "  $(YELLOW)make check-db$(RESET)            Test database connection"
-	@echo "  $(YELLOW)make dump-db$(RESET)             Dump database to dumps/<timestamp>.sql"
-	@echo "  $(YELLOW)make load-dump dump=<file>$(RESET) Load a dump into the database"
+	@echo "  $(YELLOW)make up$(RESET)"
+	@echo "      Start all services: api, db, nginx, adminer."
+	@echo "      Requires SSL certs for all domains."
 	@echo ""
-	@echo "$(GREEN)Admin:$(RESET)"
-	@echo "  $(YELLOW)make superuser$(RESET)           Create the first superuser"
+	@echo "  $(YELLOW)make up backend=1$(RESET)"
+	@echo "      Start backend only: api, db, adminer (no nginx)."
+	@echo "      Use for local dev or when frontend is not set up yet."
+	@echo "      API available at http://localhost:8000"
 	@echo ""
-	@echo "$(GREEN)SDK:$(RESET)"
-	@echo "  $(YELLOW)make sdk$(RESET)                 Regenerate sdk/types.ts from live OpenAPI schema"
+	@echo "  $(YELLOW)make down$(RESET)"
+	@echo "      Stop and remove all containers."
 	@echo ""
-	@echo "$(GREEN)Dev tools:$(RESET)"
-	@echo "  $(YELLOW)make shell$(RESET)               Open Python shell inside api container"
-	@echo "  $(YELLOW)make bash$(RESET)                Open bash shell inside api container"
-	@echo "  $(YELLOW)make lint$(RESET)                Run ruff linter"
-	@echo "  $(YELLOW)make clean$(RESET)               Remove __pycache__ and .pyc files"
+	@echo "  $(YELLOW)make restart$(RESET)"
+	@echo "      Stop then start all services. Accepts backend=1 flag."
+	@echo "      Example: make restart backend=1"
+	@echo ""
+	@echo "  $(YELLOW)make logs$(RESET)"
+	@echo "      Tail logs for all services."
+	@echo ""
+	@echo "  $(YELLOW)make logs s=api$(RESET)"
+	@echo "      Tail logs for a specific service (api, db, nginx, adminer)."
+	@echo ""
+	@echo "$(GREEN)── First-time Setup ───────────────────────────────$(RESET)"
+	@echo "  $(YELLOW)make setup$(RESET)"
+	@echo "      Full setup: ssl → build → up → init-db → seed → superuser."
+	@echo "      Run once on a fresh server."
+	@echo ""
+	@echo "  $(YELLOW)make ssl$(RESET)"
+	@echo "      Generate self-signed SSL certs (dev only)."
+	@echo "      On production, use certbot instead."
+	@echo ""
+	@echo "$(GREEN)── Database & Migrations ──────────────────────────$(RESET)"
+	@echo "  $(YELLOW)make migrate$(RESET)"
+	@echo "      Apply all pending Alembic migrations."
+	@echo ""
+	@echo "  $(YELLOW)make migrate-auto m=\"your message\"$(RESET)"
+	@echo "      Auto-generate a new migration from model changes."
+	@echo "      Example: make migrate-auto m=\"add phone to users\""
+	@echo ""
+	@echo "  $(YELLOW)make migrate-history$(RESET)"
+	@echo "      Show full migration history."
+	@echo ""
+	@echo "  $(YELLOW)make migrate-rollback$(RESET)"
+	@echo "      Undo the last applied migration."
+	@echo ""
+	@echo "  $(YELLOW)make init-db$(RESET)"
+	@echo "      Run the init_db script inside the container."
+	@echo "      Creates tables if they don't exist."
+	@echo ""
+	@echo "  $(YELLOW)make seed$(RESET)"
+	@echo "      Seed reference data (sacraments, communities, languages, etc)."
+	@echo ""
+	@echo "  $(YELLOW)make seed-rbac$(RESET)"
+	@echo "      Seed roles and permissions."
+	@echo ""
+	@echo "  $(YELLOW)make seed-parish$(RESET)"
+	@echo "      Seed the default parish and stations."
+	@echo ""
+	@echo "  $(YELLOW)make check-db$(RESET)"
+	@echo "      Test that the database connection is working."
+	@echo ""
+	@echo "  $(YELLOW)make dump-db$(RESET)"
+	@echo "      Dump the database to dumps/<timestamp>.sql."
+	@echo "      Use to back up or copy data to another environment."
+	@echo ""
+	@echo "  $(YELLOW)make load-dump dump=<filename>$(RESET)"
+	@echo "      Wipe the database and restore from a dump file."
+	@echo "      Example: make load-dump dump=dump_20260405_103405.sql"
+	@echo ""
+	@echo "$(GREEN)── Admin ───────────────────────────────────────────$(RESET)"
+	@echo "  $(YELLOW)make superuser$(RESET)"
+	@echo "      Create the first superuser account."
+	@echo "      Uses FIRST_SUPERUSER_* values from .env."
+	@echo ""
+	@echo "$(GREEN)── SDK ─────────────────────────────────────────────$(RESET)"
+	@echo "  $(YELLOW)make sdk$(RESET)"
+	@echo "      Regenerate sdk/types.ts from the live OpenAPI schema."
+	@echo "      Run after adding or changing API endpoints."
+	@echo ""
+	@echo "$(GREEN)── Dev Tools ───────────────────────────────────────$(RESET)"
+	@echo "  $(YELLOW)make shell$(RESET)"
+	@echo "      Open a Python shell inside the api container."
+	@echo ""
+	@echo "  $(YELLOW)make bash$(RESET)"
+	@echo "      Open a bash shell inside the api container."
+	@echo ""
+	@echo "  $(YELLOW)make lint$(RESET)"
+	@echo "      Run ruff linter on the app/ directory."
+	@echo ""
+	@echo "  $(YELLOW)make clean$(RESET)"
+	@echo "      Remove all __pycache__ and .pyc files."
 	@echo ""
 
 # ── Local dev (no Docker) ────────────────────────────────────
@@ -91,6 +157,15 @@ build-clean:
 
 up:
 	@echo "$(GREEN)Starting services...$(RESET)"
+ifdef backend
+	$(COMPOSE_LOCAL) up -d
+	@echo ""
+	@echo "$(CYAN)Services running (local — no nginx):$(RESET)"
+	@echo "  API:     http://localhost:8000"
+	@echo "  Docs:    http://localhost:8000/api/v1/docs"
+	@echo "  Health:  http://localhost:8000/api/v1/health"
+	@echo "  Adminer: http://localhost:8888"
+else
 	$(COMPOSE) up -d
 	@echo ""
 	@echo "$(CYAN)Services running:$(RESET)"
@@ -98,18 +173,31 @@ up:
 	@echo "  Docs:    https://localhost/api/v1/docs"
 	@echo "  Health:  https://localhost/api/v1/health"
 	@echo "  Adminer: http://localhost:8888"
+endif
 
 down:
 	@echo "$(RED)Stopping services...$(RESET)"
+ifdef backend
+	$(COMPOSE_LOCAL) down --remove-orphans
+else
 	$(COMPOSE) down --remove-orphans
+endif
 
 restart: down up
 
 logs:
-ifdef s
-	$(COMPOSE) logs -f $(s)
+ifdef backend
+  ifdef s
+	$(COMPOSE_LOCAL) logs -f $(s)
+  else
+	$(COMPOSE_LOCAL) logs -f
+  endif
 else
+  ifdef s
+	$(COMPOSE) logs -f $(s)
+  else
 	$(COMPOSE) logs -f
+  endif
 endif
 
 # ── First-time setup ─────────────────────────────────────────

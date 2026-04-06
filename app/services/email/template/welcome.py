@@ -17,27 +17,26 @@ class WelcomeEmailTemplate(BaseEmailTemplate):
         info_box = create_info_box(account_details, "Your Account Details")
         
         content = f"""
-            <h1>Welcome to SFOACC DB Platform!</h1>
-            
+            <h1>Welcome to the {settings.CHURCH_NAME} Admin Portal!</h1>
+
             <p>Hello {sanitize_html(context.full_name)},</p>
-            
-            <p>Welcome aboard! Your account has been successfully created. 
-            Here are your login details:</p>
-            
+
+            <p>Your admin account has been created. Here are your login details:</p>
+
             {info_box}
-            
+
             <p>For security reasons, please change your password upon first login.</p>
-            
+
             {cls.create_button("Login to Your Account", login_url)}
-    
-            <p>or click this link {login_url} to access the application </p>
-            
-            <p>If you need any assistance, don't hesitate to contact our support team.</p>
-            
-            <p>Best regards,<br>The Church Database Project Team</p>
+
+            <p>Or copy this link into your browser: {login_url}</p>
+
+            <p>If you need any assistance, contact your administrator.</p>
+
+            <p>Best regards,<br>{settings.CHURCH_NAME}</p>
         """
-        
+
         return {
-            "subject": "Welcome to Our Platform! 🎉",
+            "subject": f"Your {settings.CHURCH_NAME} admin account is ready",
             "html_content": cls.wrap_content(content)
         }

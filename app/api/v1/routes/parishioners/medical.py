@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Path as FastAPIPath
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser, is_admin
+from app.api.deps import SessionDep, CurrentUser, has_permission
 from app.models.parishioner import Parishioner, MedicalCondition
 from app.schemas.common import APIResponse
 from app.schemas.parishioner import MedicalConditionCreate, MedicalConditionRead, MedicalConditionUpdate
@@ -42,7 +42,7 @@ async def create_medical_condition(
     current_user: CurrentUser,
 ) -> Any:
     """Create a new medical condition for a parishioner (limit 5 per parishioner)."""
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -158,7 +158,7 @@ async def update_medical_condition(
     condition_in: MedicalConditionUpdate,
 ) -> Any:
     """Update a medical condition for a parishioner."""
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -217,7 +217,7 @@ async def delete_medical_condition(
     condition_id: int = FastAPIPath(..., title="The ID of the medical condition to delete"),
 ) -> Any:
     """Delete a medical condition for a parishioner."""
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -271,7 +271,7 @@ async def batch_update_medical_conditions(
     Maximum of 5 medical conditions allowed per parishioner.
     """
     # Check permissions
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

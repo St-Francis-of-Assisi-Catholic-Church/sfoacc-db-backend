@@ -528,6 +528,10 @@ export class SFOACCClient {
     return this.request(`/api/v1/sacraments/${id}`);
   }
 
+  getSacramentRecipients(id: number | string): Promise<APIResponse<unknown[]>> {
+    return this.request(`/api/v1/sacraments/${id}/recipients`);
+  }
+
   // ── Admin Settings ─────────────────────────────────────────────────────────
 
   /** Get all raw settings as a list of SettingRead. */

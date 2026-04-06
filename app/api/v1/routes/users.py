@@ -1,11 +1,12 @@
 import logging
 import secrets
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import SessionDep, CurrentUser, require_permission, is_super_admin
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission, is_super_admin
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.schemas.common import APIResponse
@@ -19,15 +20,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _assert_user_in_unit(user: UserModel, unit_scope: int) -> None:
+    """Raise 403 if the target user has no membership in the given unit."""
+    unit_ids = {m.church_unit_id for m in (user.unit_memberships or [])}
+    if unit_scope not in unit_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only manage users who belong to your church unit.",
+        )
+
+
 @router.get("/{user_id}", response_model=APIResponse)
 async def get_user(
     user_id: UUID,
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
 ) -> Any:
     user = session.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if unit_scope is not None:
+        _assert_user_in_unit(user, unit_scope)
     return APIResponse(message="User retrieved successfully", data=User.model_validate(user))
 
 
@@ -35,10 +49,20 @@ async def get_user(
 async def get_users(
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
-    users = session.query(UserModel).offset(skip).limit(limit).all()
+    q = session.query(UserModel)
+    if unit_scope is not None:
+        unit_user_ids = [
+            m.user_id
+            for m in session.query(UserChurchUnit.user_id)
+            .filter(UserChurchUnit.church_unit_id == unit_scope)
+            .all()
+        ]
+        q = q.filter(UserModel.id.in_(unit_user_ids))
+    users = q.offset(skip).limit(limit).all()
     return APIResponse(
         message="Users retrieved successfully",
         data=[User.model_validate(user) for user in users],
@@ -50,6 +74,7 @@ async def update_user(
     *,
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
     user_id: UUID,
     user_in: UserUpdate,
 ) -> Any:
@@ -71,6 +96,10 @@ async def update_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot update your own profile through this endpoint. Please use the profile update endpoint",
         )
+
+    # Unit-scoped users can only edit users in their unit
+    if unit_scope is not None:
+        _assert_user_in_unit(user, unit_scope)
 
     update_data = user_in.model_dump(exclude_unset=True)
 
@@ -103,8 +132,14 @@ async def update_user(
                 detail="A phone number is required when setting login method to sms_otp",
             )
 
+    role_changed = "role_id" in update_data and update_data["role_id"] != user.role_id
+
     for field, value in update_data.items():
         setattr(user, field, value)
+
+    # Invalidate all existing tokens so the user must re-login with their new role
+    if role_changed:
+        user.tokens_invalidated_before = datetime.now(timezone.utc)
 
     try:
         session.add(user)
@@ -123,6 +158,7 @@ async def delete_user(
     *,
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
     user_id: UUID,
 ) -> Any:
     user = session.query(UserModel).filter(UserModel.id == user_id).first()
@@ -144,9 +180,14 @@ async def delete_user(
             detail="Cannot delete your own user account",
         )
 
+    # Unit-scoped users can only delete users in their unit
+    if unit_scope is not None:
+        _assert_user_in_unit(user, unit_scope)
+
+    user_data = User.model_validate(user)
     session.delete(user)
     session.commit()
-    return APIResponse(message="User deleted successfully", data=User.model_validate(user))
+    return APIResponse(message="User deleted successfully", data=user_data)
 
 
 @router.post("", response_model=APIResponse, dependencies=[require_permission("user:write")])
@@ -155,6 +196,7 @@ async def create_user(
     session: SessionDep,
     user_in: UserCreate,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
 ) -> Any:
     try:
         temp_password = secrets.token_urlsafe(12)
@@ -176,6 +218,21 @@ async def create_user(
                 )
             role_id = role.id
 
+        # Unit-scoped users must assign the new user to their unit
+        church_units = user_in.church_units or []
+        if unit_scope is not None:
+            provided_unit_ids = {a.church_unit_id for a in church_units}
+            if not provided_unit_ids:
+                # Auto-assign to the creator's unit
+                church_units = [ChurchUnitAssignment(church_unit_id=unit_scope)]
+            elif unit_scope not in provided_unit_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only create users assigned to your church unit.",
+                )
+            # Strip any units outside the creator's scope
+            church_units = [a for a in church_units if a.church_unit_id == unit_scope]
+
         from app.models.user import LoginMethod
         user = UserModel(
             email=user_in.email,
@@ -189,10 +246,10 @@ async def create_user(
         session.add(user)
         session.flush()
 
-        # Assign multi-unit memberships if provided
-        if user_in.church_units:
+        # Assign church unit memberships
+        if church_units:
             from app.models.rbac import Role as RoleModel
-            for assignment in user_in.church_units:
+            for assignment in church_units:
                 unit = session.query(ChurchUnit).filter(ChurchUnit.id == assignment.church_unit_id).first()
                 if not unit:
                     raise HTTPException(status_code=400, detail=f"Church unit {assignment.church_unit_id} not found")
@@ -220,13 +277,11 @@ async def create_user(
 
         sms_sent = False
         if user.phone:
-            sms_result = sms_service.send_sms(
-                phone_numbers=[user.phone],
-                message=(
-                    f"Hi {user.full_name}, your {settings.CHURCH_NAME} admin account has been created. "
-                    f"Temporary password: {temp_password}. "
-                    f"Login at {settings.FRONTEND_HOST} and change your password immediately."
-                ),
+            sms_result = sms_service.send_user_account_created(
+                phone=user.phone,
+                full_name=user.full_name,
+                email=user.email,
+                temp_password=temp_password,
             )
             sms_sent = sms_result.get("success", False)
             if not sms_sent:
@@ -269,13 +324,23 @@ def _get_user_or_404(session, user_id: UUID) -> UserModel:
 
 @router.get("/{user_id}/church-units", response_model=APIResponse,
             dependencies=[require_permission("user:read")])
-async def get_user_church_units(user_id: UUID, session: SessionDep, current_user: CurrentUser) -> Any:
+async def get_user_church_units(
+    user_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
+) -> Any:
     """List all church units assigned to a user."""
     user = _get_user_or_404(session, user_id)
+    if unit_scope is not None:
+        _assert_user_in_unit(user, unit_scope)
     data = []
     for m in (user.unit_memberships or []):
         cu = m.church_unit
         if not cu:
+            continue
+        # Unit-scoped: only return the scoped unit's membership
+        if unit_scope is not None and cu.id != unit_scope:
             continue
         data.append({
             "church_unit_id": cu.id,
@@ -294,14 +359,19 @@ async def assign_church_units(
     assignments: list[ChurchUnitAssignment],
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
 ) -> Any:
     """
     Assign one or more church units to a user.
     Already-assigned units are updated in-place (role changed if provided).
+    Unit-scoped callers can only assign their own unit.
     """
     from app.models.rbac import Role as RoleModel
 
-    _get_user_or_404(session, user_id)
+    user = _get_user_or_404(session, user_id)
+    if unit_scope is not None:
+        _assert_user_in_unit(user, unit_scope)
+        assignments = [a for a in assignments if a.church_unit_id == unit_scope]
 
     existing = {
         m.church_unit_id: m
@@ -336,14 +406,19 @@ async def replace_church_units(
     assignments: list[ChurchUnitAssignment],
     session: SessionDep,
     current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
 ) -> Any:
     """
     Replace all church unit assignments for a user atomically.
-    Removes any units not in the new list.
+    Unit-scoped callers only replace their own unit's assignment (other units are preserved).
     """
     from app.models.rbac import Role as RoleModel
 
-    _get_user_or_404(session, user_id)
+    user = _get_user_or_404(session, user_id)
+    if unit_scope is not None:
+        _assert_user_in_unit(user, unit_scope)
+        # Only replace the scoped unit; strip anything outside scope
+        assignments = [a for a in assignments if a.church_unit_id == unit_scope]
 
     # Validate all units and roles before making changes
     resolved = []
@@ -359,7 +434,15 @@ async def replace_church_units(
             unit_role_id = r.id
         resolved.append((a.church_unit_id, unit_role_id))
 
-    session.query(UserChurchUnit).filter(UserChurchUnit.user_id == user_id).delete()
+    if unit_scope is not None:
+        # Only delete the scoped unit's membership; leave others intact
+        session.query(UserChurchUnit).filter(
+            UserChurchUnit.user_id == user_id,
+            UserChurchUnit.church_unit_id == unit_scope,
+        ).delete()
+    else:
+        session.query(UserChurchUnit).filter(UserChurchUnit.user_id == user_id).delete()
+
     for church_unit_id, role_id in resolved:
         session.add(UserChurchUnit(user_id=user_id, church_unit_id=church_unit_id, role_id=role_id))
 
@@ -370,10 +453,19 @@ async def replace_church_units(
 @router.delete("/{user_id}/church-units/{unit_id}", response_model=APIResponse,
                dependencies=[require_permission("user:write")])
 async def remove_church_unit(
-    user_id: UUID, unit_id: int, session: SessionDep, current_user: CurrentUser
+    user_id: UUID,
+    unit_id: int,
+    session: SessionDep,
+    current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
 ) -> Any:
     """Remove a single church unit from a user."""
-    _get_user_or_404(session, user_id)
+    user = _get_user_or_404(session, user_id)
+    if unit_scope is not None and unit_id != unit_scope:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only remove users from your own church unit.",
+        )
     membership = session.query(UserChurchUnit).filter(
         UserChurchUnit.user_id == user_id,
         UserChurchUnit.church_unit_id == unit_id,

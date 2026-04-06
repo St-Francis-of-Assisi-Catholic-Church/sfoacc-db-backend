@@ -9,20 +9,24 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import subqueryload
 
-from app.api.deps import SessionDep, require_permission
+from app.api.deps import SessionDep, CurrentUser, ChurchUnitScope, require_permission
 from app.core.config import settings
-from app.models.user import User as UserModel
+from app.models.user import User as UserModel, UserChurchUnit
 from app.models.parishioner.core import Parishioner
 from app.models.parishioner.related import FamilyInfo
 from app.models.parishioner.core import ParishionerSacrament
+from app.models.society import Society, society_members
+from app.models.church_community import ChurchCommunity
+from app.models.parish import ChurchUnit
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_REQUIRE = require_permission("admin:all")
+_REQUIRE_SUPERADMIN = require_permission("admin:all")
+_REQUIRE_REPORTING = require_permission("reporting:read")
 
 
-@router.get("/db-dump", dependencies=[_REQUIRE])
+@router.get("/db-dump", dependencies=[_REQUIRE_SUPERADMIN])
 async def download_db_dump() -> StreamingResponse:
     """
     Stream a pg_dump of the entire database. Super admin only.
@@ -76,12 +80,28 @@ async def download_db_dump() -> StreamingResponse:
     )
 
 
-@router.get("/users-csv", dependencies=[_REQUIRE])
-async def export_users_csv(session: SessionDep) -> StreamingResponse:
+@router.get("/users-csv", dependencies=[_REQUIRE_REPORTING])
+async def export_users_csv(
+    session: SessionDep,
+    current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
+) -> StreamingResponse:
     """
-    Export all users as a CSV file. Super admin only.
+    Export users as a CSV file.
+    Super admins get all users. Unit-scoped users get only users in their unit.
     """
-    users = session.query(UserModel).order_by(UserModel.created_at).all()
+    q = session.query(UserModel).order_by(UserModel.created_at)
+
+    if unit_scope is not None:
+        unit_user_ids = [
+            m.user_id
+            for m in session.query(UserChurchUnit.user_id)
+            .filter(UserChurchUnit.church_unit_id == unit_scope)
+            .all()
+        ]
+        q = q.filter(UserModel.id.in_(unit_user_ids))
+
+    users = q.all()
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -129,15 +149,22 @@ async def export_users_csv(session: SessionDep) -> StreamingResponse:
     )
 
 
-@router.get("/parishioners-csv", dependencies=[_REQUIRE])
-async def export_parishioners_csv(session: SessionDep) -> StreamingResponse:
+@router.get("/parishioners-csv", dependencies=[_REQUIRE_REPORTING])
+async def export_parishioners_csv(
+    session: SessionDep,
+    current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
+) -> StreamingResponse:
     """
-    Export all parishioners with full detail (sacraments, societies, family,
-    emergency contacts, medical conditions, occupation, skills, languages).
-    Super admin only.
+    Export parishioners with full detail.
+    Super admins get all parishioners. Unit-scoped users get only their unit's parishioners.
     """
+    base_q = session.query(Parishioner)
+    if unit_scope is not None:
+        base_q = base_q.filter(Parishioner.church_unit_id == unit_scope)
+
     parishioners = (
-        session.query(Parishioner)
+        base_q
         .options(
             subqueryload(Parishioner.church_unit),
             subqueryload(Parishioner.church_community),
@@ -279,4 +306,99 @@ async def export_parishioners_csv(session: SessionDep) -> StreamingResponse:
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/societies-csv", dependencies=[_REQUIRE_REPORTING])
+async def export_societies_csv(
+    session: SessionDep,
+    current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
+) -> StreamingResponse:
+    """Export societies with member counts and member names, scoped to the user's unit."""
+    q = session.query(Society).options(
+        subqueryload(Society.members),
+        subqueryload(Society.church_unit),
+    )
+    if unit_scope is not None:
+        q = q.filter(Society.church_unit_id == unit_scope)
+    societies = q.order_by(Society.name).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "society_name", "church_unit", "is_active", "date_inaugurated",
+        "meeting_frequency", "meeting_day", "meeting_venue",
+        "total_members", "members",
+    ])
+
+    for s in societies:
+        member_names = " | ".join(
+            f"{m.first_name} {m.last_name}" for m in s.members
+        )
+        writer.writerow([
+            s.name,
+            s.church_unit.name if s.church_unit else "",
+            "yes" if s.is_active else "no",
+            s.date_inaugurated.isoformat() if s.date_inaugurated else "",
+            s.meeting_frequency.value if s.meeting_frequency else "",
+            s.meeting_day or "",
+            s.meeting_venue or "",
+            len(s.members),
+            member_names,
+        ])
+
+    output.seek(0)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="societies_export_{timestamp}.csv"'},
+    )
+
+
+@router.get("/communities-csv", dependencies=[_REQUIRE_REPORTING])
+async def export_communities_csv(
+    session: SessionDep,
+    current_user: CurrentUser,
+    unit_scope: ChurchUnitScope,
+) -> StreamingResponse:
+    """Export church communities with member counts, scoped to the user's unit."""
+    q = session.query(ChurchCommunity).options(
+        subqueryload(ChurchCommunity.church_unit),
+    )
+    if unit_scope is not None:
+        q = q.filter(ChurchCommunity.church_unit_id == unit_scope)
+    communities = q.order_by(ChurchCommunity.name).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "community_name", "church_unit", "description", "location", "is_active",
+        "total_members", "members",
+    ])
+
+    for c in communities:
+        parishioners = session.query(Parishioner).filter(
+            Parishioner.church_community_id == c.id
+        ).all()
+        member_names = " | ".join(
+            f"{p.first_name} {p.last_name}" for p in parishioners
+        )
+        writer.writerow([
+            c.name,
+            c.church_unit.name if c.church_unit else "",
+            c.description or "",
+            c.location or "",
+            "yes" if c.is_active else "no",
+            len(parishioners),
+            member_names,
+        ])
+
+    output.seek(0)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="communities_export_{timestamp}.csv"'},
     )

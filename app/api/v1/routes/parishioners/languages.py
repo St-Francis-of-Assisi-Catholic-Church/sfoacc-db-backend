@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Path, Query, BackgroundTasks
 
 
-from app.api.deps import CurrentUser, SessionDep, is_admin
+from app.api.deps import CurrentUser, SessionDep, has_permission
 from app.models.language import Language
 from app.models.parishioner import Parishioner
 from app.schemas.common import APIResponse
@@ -31,7 +31,7 @@ async def get_parishioner_languages(
     """
     Get all languages spoken by a parishioner.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -74,7 +74,7 @@ async def assign_languages_to_parishioner(
     """
     Assign languages to a parishioner.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -147,7 +147,7 @@ async def remove_languages_from_parishioner(
     """
     Remove languages from a parishioner.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -220,7 +220,7 @@ async def remove_language_from_parishioner(
     """
     Remove a specific language from a parishioner.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "parishioner:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

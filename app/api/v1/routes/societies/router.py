@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload, relationship
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
-from app.api.deps import SessionDep, CurrentUser, OutstationScope, require_permission, is_admin
+from app.api.deps import SessionDep, CurrentUser, OutstationScope, require_permission, has_permission
 from app.models.parish import ChurchUnit
 from app.models.common import MembershipStatus
 from app.models.society import Society, SocietyLeadership, LeadershipRole, MeetingFrequency
@@ -290,7 +290,7 @@ async def read_society(
     """
     Get detailed information about a specific society.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -429,7 +429,7 @@ async def add_leadership_position(
     """
     Add a leadership position to a society.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -553,7 +553,7 @@ async def get_leadership(
     """
     Get all leadership positions for a society.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -595,7 +595,7 @@ async def update_leadership_position(
     """
     Update a leadership position for a society.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -715,7 +715,7 @@ async def delete_leadership_position(
     """
     Delete a leadership position from a society.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:write"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -763,7 +763,7 @@ async def add_members_to_society(
     Members can be added with a specific join date, otherwise the current date is used.
     Each member is added with 'active' status by default.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:membership"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -859,7 +859,7 @@ async def remove_members_from_society(
     """
     Remove members from a society.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:membership"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -936,12 +936,12 @@ async def get_members_of_society(
     """
     Get members of a society with pagination and optional search and status filtering.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
-    
+
     try:
         society = session.query(Society).filter(Society.id == society_id).first()
         if society is None:
@@ -1001,7 +1001,7 @@ async def update_member_status(
     """
     Update a member's status in the society.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:membership"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
@@ -1095,7 +1095,7 @@ async def get_members_by_status(
     """
     Get society members filtered by status.
     """
-    if not is_admin(current_user):
+    if not has_permission(current_user, "society:read"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"

@@ -28,6 +28,16 @@ class SMSService:
     def _initialize_templates(self) -> Dict[str, SMSTemplate]:
         """Initialize SMS templates."""
         return {
+            # new admin user account creation
+            "user_account_created": SMSTemplate(
+                name="Admin Account Created",
+                content=(
+                    "Hi {full_name}, your {church_name} admin account has been created. "
+                    "Username: {email}. Temp password: {temp_password}. "
+                    "Login at {login_url} and change your password immediately."
+                )
+            ),
+
             # welcome message; when parishioners are created, same as for new users
             "main_welcome_message": SMSTemplate(
                 name="Welcome Message",
@@ -113,7 +123,16 @@ class SMSService:
         
         try:
             response = self.client.post(self.base_url, headers=self.headers, json=payload)
-            response.raise_for_status()
+            if not response.is_success:
+                logger.error(
+                    "SMS API error %d: %s | payload: %s",
+                    response.status_code, response.text, payload
+                )
+                return {
+                    "success": False,
+                    "message": f"SMS API returned {response.status_code}",
+                    "error": response.text,
+                }
             logger.info("SMS sent to %d recipients", len(formatted_numbers))
             return {
                 "success": True,
@@ -153,10 +172,22 @@ class SMSService:
     def _create_base_context(self, parishioner_name: str) -> Dict[str, str]:
         return {
             "parishioner_name": parishioner_name,
-            "church_name": settings.CHURCH_NAME,
+            "church_name": settings.PROJECT_NAME,
             "church_contact": settings.CHURCH_CONTACT
         }
     
+    def send_user_account_created(self, phone: str, full_name: str, email: str, temp_password: str) -> Dict[str, Any]:
+        """Send account creation SMS to a new admin user."""
+        context = self._create_base_context(full_name)
+        context.update({
+            "full_name": full_name,
+            "email": email,
+            "temp_password": temp_password,
+            "login_url": settings.FRONTEND_HOST,
+            "church_name": settings.PROJECT_NAME,
+        })
+        return self.send_from_template("user_account_created", [phone], context)
+
     def send_verification_message(self,
                                  phone: str,
                                  parishioner_name: str,

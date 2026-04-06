@@ -53,6 +53,7 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./nginx/logs:/var/log/nginx
       - /opt/sfoacc/frontend:/usr/share/nginx/html/frontend
+      - /opt/sfoacc/landing:/usr/share/nginx/html/landing
     depends_on:
       - api
     networks:

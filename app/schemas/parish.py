@@ -10,6 +10,7 @@ class MassScheduleCreate(BaseModel):
     day_of_week: DayOfWeek
     time: time
     mass_type: MassType = MassType.SUNDAY
+    label: Optional[str] = None
     language: str = "English"
     description: Optional[str] = None
 
@@ -17,6 +18,7 @@ class MassScheduleCreate(BaseModel):
 class MassScheduleUpdate(MassScheduleCreate):
     day_of_week: Optional[DayOfWeek] = None
     time: Optional[time] = None
+    label: Optional[str] = None
     is_active: Optional[bool] = None
 
 

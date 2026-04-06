@@ -14,8 +14,9 @@ ALGORITHM = "HS256"
 
 
 def create_access_token(subject: str | UUID | Any, expires_delta: timedelta) -> str:
-    expire = datetime.now(timezone.utc) + expires_delta
-    to_encode = {"exp": expire, "sub": str(subject)}
+    now = datetime.now(timezone.utc)
+    expire = now + expires_delta
+    to_encode = {"exp": expire, "iat": now, "sub": str(subject)}
     return api_jwt.encode(payload=to_encode, key=settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
