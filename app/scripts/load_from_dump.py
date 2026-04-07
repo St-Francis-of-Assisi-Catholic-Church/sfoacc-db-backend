@@ -33,7 +33,9 @@ from typing import Any
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger("load_from_dump")
 
-DUMP_PATH = os.path.join(ROOT, "dumps", "app_dump_20260310_075402.sql")
+_default_dump = "app_dump_20260310_075402.sql"
+_dump_file = sys.argv[1] if len(sys.argv) > 1 else _default_dump
+DUMP_PATH = os.path.join(ROOT, "dumps", _dump_file)
 
 # ── Enum normalisation ────────────────────────────────────────────────────────
 # PostgreSQL enums use UPPERCASE labels. The dump is mostly uppercase but some

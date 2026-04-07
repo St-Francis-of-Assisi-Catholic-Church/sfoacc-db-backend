@@ -275,9 +275,13 @@ superuser:
 	$(COMPOSE) exec api python3 -m app.scripts.create_superuser
 
 load-parishioners:
-	@echo "$(GREEN)Loading parishioners from dump...$(RESET)"
-	$(COMPOSE) cp dumps/app_dump_20260310_075402.sql api:/app/dumps/app_dump_20260310_075402.sql
-	$(COMPOSE) exec api python3 /app/app/scripts/load_from_dump.py
+ifndef dump
+	$(eval dump := app_dump_20260310_075402.sql)
+endif
+	@test -f dumps/$(dump) || (echo "$(RED)Error: dumps/$(dump) not found$(RESET)" && exit 1)
+	@echo "$(GREEN)Loading parishioners from dumps/$(dump)...$(RESET)"
+	$(COMPOSE) cp dumps/$(dump) api:/app/dumps/$(dump)
+	$(COMPOSE) exec api python3 /app/app/scripts/load_from_dump.py $(dump)
 
 # ── Dumps ────────────────────────────────────────────────────
 dump-db:
