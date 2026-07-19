@@ -1,8 +1,10 @@
 .env
-.env.staging 
+.env.staging
 .venv
 nginx/ssl/
 nginx/logs/
+*.pem
+*.key
 __pycache__
 app.egg-info
 *.pyc

@@ -1,4 +1,4 @@
-version: "3.8"
+
 
 services:
   db:
@@ -59,7 +59,7 @@ services:
     networks:
       - sfoacc-project-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8081/health"]
       interval: 10s
       timeout: 5s
       retries: 5

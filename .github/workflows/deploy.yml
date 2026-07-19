@@ -41,7 +41,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             set -e
-            cd /opt/sfoacc
+            cd /opt/sfoacc/sfoacc-db-backend
 
             echo "==> Pulling latest code"
             git pull origin main
